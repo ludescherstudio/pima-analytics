@@ -1,0 +1,19 @@
+# --- pima runtime data (nicht hochladen) ---
+pima-cache/*
+!pima-cache/.htaccess
+*.db
+*.sqlite
+*.sqlite3
+.geo_cache.json
+
+# --- Betriebssystem-Dateien ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- ownCloud Sync-Konflikte ---
+*_conflict-*
+*.~lock*
+
+# --- Claude Code (lokale Werkzeug-Einstellungen) ---
+.claude/
