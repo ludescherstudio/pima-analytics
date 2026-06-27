@@ -609,21 +609,21 @@ if ($isLocked) {
 
   @keyframes login-up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
-  .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem; background:radial-gradient(ellipse at 30% 40%, <?= htmlspecialchars($brandColor) ?>0a, transparent 60%), #0e0e0e; }
-  .login-box { width:100%; max-width:340px; animation:login-up .45s ease-out; background:none; border:none; border-radius:0; padding:0; box-shadow:none; }
+  .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem; background:radial-gradient(ellipse at 30% 40%, <?= htmlspecialchars($brandColor) ?>0f, transparent 60%), var(--bg); }
+  .login-box { width:100%; max-width:340px; animation:login-up .45s ease-out; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:2rem; box-shadow:0 4px 24px rgba(26,32,44,.06); }
   .login-logo { margin-bottom:1.5rem; }
   .login-logo img { max-height:36px; max-width:160px; }
-  .login-box .sub { font-size:.8rem; color:#807a74; margin:.25rem 0 2rem; text-transform:none; letter-spacing:0; }
+  .login-box .sub { font-size:.8rem; color:var(--muted); margin:.25rem 0 2rem; text-transform:none; letter-spacing:0; }
   .login-error { padding:.6rem .85rem; background:#f871710f; border:1px solid #f8717118; border-radius:7px; color:#f87171; font-size:.84rem; margin-bottom:1rem; }
   .login-locked { padding:.6rem .85rem; background:#f871710f; border:1px solid #f8717118; border-radius:7px; color:#f87171; font-size:.84rem; margin-bottom:1rem; }
-  .login-box input[type=password] { width:100%; padding:.8rem 1rem; background:#171717; border:1px solid #262626; border-radius:10px; color:#e5e0da; font-family:inherit; font-size:.93rem; outline:0; transition:border-color .2s, box-shadow .2s; }
+  .login-box input[type=password] { width:100%; padding:.8rem 1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text); font-family:inherit; font-size:.93rem; outline:0; transition:border-color .2s, box-shadow .2s; }
   .login-box input[type=password]:focus { border-color:var(--accent); box-shadow:0 0 0 3px <?= htmlspecialchars($brandColor) ?>22; }
-  .login-box input[type=password]::placeholder { color:#4a4540; }
+  .login-box input[type=password]::placeholder { color:var(--muted); }
   .login-box input:disabled, .login-box button:disabled { opacity:.4; cursor:not-allowed; }
   .login-box button { width:100%; padding:.8rem; margin-top:.75rem; background:var(--accent); color:#fff; border:0; border-radius:10px; font-family:inherit; font-size:.93rem; font-weight:600; cursor:pointer; transition:opacity .15s, transform .1s; }
   .login-box button:hover:not(:disabled) { opacity:.88; }
   .login-box button:active:not(:disabled) { transform:scale(.98); }
-  .attempts-hint { font-size:.72rem; color:#807a74; margin-top:.4rem; }
+  .attempts-hint { font-size:.72rem; color:var(--muted); margin-top:.4rem; }
 
   header { background:#333333; border-bottom:1px solid #444444; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
   .header-pima { display:flex; flex-direction:column; justify-content:center; }
@@ -776,7 +776,7 @@ if ($isLocked) {
     <?php if ($brandLogo): ?>
       <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
     <?php else: ?>
-      <img src="<?= $pimaLogoDark ?>" alt="pima Analytics" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
+      <img src="<?= $pimaLogoLight ?>" alt="pima Analytics" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
     <?php endif; ?>
     <p class="sub"><?= htmlspecialchars($brandName) ?></p>
     <?php if (STATS_PASSWORD === 'change-me-please'): ?>
