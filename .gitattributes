@@ -1,0 +1,20 @@
+# Normalise line endings to LF in the repository.
+# Without this, a Windows checkout (git's core.autocrlf defaults to true there)
+# hands every file back with CRLF. The files are deployed to a Linux webserver
+# and edited from more than one machine, so the next commit from a different
+# OS would otherwise show up as a whole-file diff.
+* text=auto eol=lf
+
+*.php     text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+*.svg     text eol=lf
+LICENSE   text eol=lf
+.htaccess text eol=lf
+
+# Binary assets — never normalise, never diff.
+*.webp binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary

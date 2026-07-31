@@ -30,20 +30,35 @@ $csrfOk = isset($_POST['csrf']) && hash_equals($csrf, (string) $_POST['csrf']);
 header('Cache-Control: no-store, no-cache, must-revalidate, private');
 header('Pragma: no-cache');
 
+// Protection headers. The dashboard carries a one-click destructive action
+// (Danger Zone → clear all data). A CSRF token does not help there: in a
+// clickjacking attack the victim clicks the real button inside an invisible
+// frame, so the token travels along and validates. 'frame-ancestors' is the
+// modern form, X-Frame-Options the one older browsers understand — both cost
+// nothing here, since the dashboard never needs to be framed.
+header('X-Frame-Options: DENY');
+header("Content-Security-Policy: frame-ancestors 'none'");
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: no-referrer');
+
 // ---- Brute-force protection (file-based, per IP) ----
 // Session-only tracking can be bypassed by simply discarding the cookie,
 // so we persist attempts in a small JSON file keyed by a hash of the IP.
 $maxAttempts = defined('MAX_LOGIN_ATTEMPTS') ? MAX_LOGIN_ATTEMPTS : 5;
 $lockoutSecs = defined('LOCKOUT_SECONDS')    ? LOCKOUT_SECONDS    : 900;
 
-// Lockout an die echte Client-IP binden — TRUST_PROXY respektieren
-$trustProxy = defined('TRUST_PROXY') ? TRUST_PROXY : false;
-$clientIp = ($trustProxy && !empty($_SERVER['HTTP_X_FORWARDED_FOR']))
-    ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
-    : ($_SERVER['REMOTE_ADDR'] ?? '');
-$ipKey    = substr(hash('sha256', ($clientIp ?: 'unknown') . '|pima-lockout'), 0, 16);
+// The lockout is keyed on REMOTE_ADDR only — deliberately NOT on
+// X-Forwarded-For, even when TRUST_PROXY is on. A forwarded header is
+// attacker-controlled unless a trusted proxy really does sit in front, and a
+// misconfigured TRUST_PROXY would turn the lockout into a no-op: rotate the
+// header, get a fresh counter, guess forever. REMOTE_ADDR cannot be spoofed.
+// (Tracking still honours TRUST_PROXY — see pima-tracker.php. Getting a
+// visitor's country slightly wrong is cosmetic; losing the lockout is not.)
+$ipKey    = substr(hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? 'unknown') . '|pima-lockout'), 0, 16);
 $lockFile = dirname(DB_PATH) . '/.lockout_' . $ipKey . '.json';
 
+// Unlocked read — only decides whether to show the "locked" screen. A stale
+// read here is harmless; the counter itself is updated under a lock below.
 $lockState = ['attempts' => 0, 'locked_until' => 0];
 if (file_exists($lockFile)) {
     $decoded = json_decode(@file_get_contents($lockFile), true);
@@ -56,19 +71,56 @@ $attempts    = $lockState['attempts'];
 $lockedUntil = $lockState['locked_until'];
 $isLocked    = time() < $lockedUntil;
 
-// Periodic prune of stale lockout files (once per authed session hit).
+// Periodic prune of stale lockout files. Keyed on the file's mtime, not on
+// locked_until: a counter that has not reached MAX_LOGIN_ATTEMPTS yet still
+// carries locked_until = 0, and comparing that against time() would delete
+// every half-full counter on sight — handing an attacker a free reset.
 if (!file_exists($lockFile) && mt_rand(1, 50) === 1) {
     foreach (glob(dirname(DB_PATH) . '/.lockout_*.json') as $f) {
-        $d = json_decode(@file_get_contents($f), true);
-        if (!is_array($d) || (int)($d['locked_until'] ?? 0) + $lockoutSecs < time()) @unlink($f);
+        if ((int) @filemtime($f) < time() - max(3600, $lockoutSecs * 2)) @unlink($f);
     }
 }
 
-$writeLock = function(int $attempts, int $lockedUntil) use ($lockFile) {
-    @file_put_contents($lockFile, json_encode(['attempts' => $attempts, 'locked_until' => $lockedUntil]), LOCK_EX);
+// Record a failed attempt atomically and return the new state.
+// 'c+' creates the file if absent and keeps it open for read+write, so one
+// flock() spans both. The previous version read the counter outside any lock
+// and wrote it back with file_put_contents(LOCK_EX) — that lock only covers
+// the write. Concurrent login POSTs therefore all read the same value and all
+// wrote the same successor: 20 parallel guesses counted as one and the lockout
+// never tripped.
+$registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
+    $fh = @fopen($lockFile, 'c+');
+    if (!$fh) return [0, 0];                        // not writable → cannot throttle
+    if (!flock($fh, LOCK_EX)) { fclose($fh); return [0, 0]; }
+
+    $raw     = stream_get_contents($fh);
+    $decoded = ($raw !== false && $raw !== '') ? json_decode($raw, true) : null;
+    $att     = is_array($decoded) ? (int) ($decoded['attempts']     ?? 0) : 0;
+    $until   = is_array($decoded) ? (int) ($decoded['locked_until'] ?? 0) : 0;
+
+    $att++;
+    if ($att >= $maxAttempts) $until = time() + $lockoutSecs;
+
+    $json = (string) json_encode(['attempts' => $att, 'locked_until' => $until]);
+    rewind($fh);
+    ftruncate($fh, 0);
+    // A partial write would leave invalid JSON. That decodes to null on the
+    // next read, the counter reads as empty and the brake is silently off —
+    // better to leave the file empty than corrupt.
+    if (fwrite($fh, $json) !== strlen($json)) ftruncate($fh, 0);
+    fflush($fh);
+    flock($fh, LOCK_UN);
+    fclose($fh);
+
+    return [$att, $until];
 };
 
 // ---- Auth ----
+// Hitting a locked account should cost time too, otherwise the lock screen is
+// just a fast 200 an attacker can hammer while waiting the window out.
+if ($isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
+    sleep(min(3, max(1, $lockedUntil - time())));
+}
 if (!$isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     $pw = (string) $_POST['password'];
     $stored = (string) STATS_PASSWORD;
@@ -84,12 +136,11 @@ if (!$isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['passwor
         @unlink($lockFile);
         $attempts = 0; $lockedUntil = 0;
     } else {
-        $attempts++;
-        if ($attempts >= $maxAttempts) {
-            $lockedUntil = time() + $lockoutSecs;
-            $isLocked    = true;
-        }
-        $writeLock($attempts, $lockedUntil);
+        [$attempts, $lockedUntil] = $registerFail();
+        $isLocked  = time() < $lockedUntil;
+        // Backoff inside the window as well: without it an attacker gets all
+        // MAX_LOGIN_ATTEMPTS guesses at full speed before the lock even starts.
+        sleep(min(8, max(1, $attempts)));
         $authError = true;
     }
 }

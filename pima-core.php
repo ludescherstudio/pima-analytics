@@ -39,6 +39,9 @@ define('EXCLUDED_IPS', [
 // Only enable if your site sits behind a trusted reverse proxy/CDN
 // (e.g. Cloudflare, nginx). If disabled (default), the real client IP
 // is taken from REMOTE_ADDR, which cannot be spoofed by visitors.
+// Affects tracking only (country lookup, visitor hash). The dashboard's
+// login lockout always uses REMOTE_ADDR, so a wrong setting here cannot
+// be used to escape it.
 define('TRUST_PROXY', false);
 
 // --- Bot filter ---
