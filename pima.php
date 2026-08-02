@@ -186,6 +186,8 @@ $strings = [
         'win_30'           => 'Last 30 Days',
         'vs_prev_7'        => 'vs previous 7 days',
         'vs_prev_30'       => 'vs previous 30 days',
+        'visitor_days'     => 'visitor-days',
+        'tip_visitor_days' => 'Counted per day: someone who visits on three different days counts three times. The visitor hash is re-salted every night, so nobody is recognised across days — which is exactly why this is not a headcount.',
         'trend'            => '-Day Trend',
         'top_pages'        => 'Top Pages',
         'win_30_label'     => 'last 30 days',
@@ -205,6 +207,12 @@ $strings = [
         'ch_referral'      => 'Referral',
         'tip_channels'     => 'How visitors found your site: directly, via search engines, social media, or other websites.',
         'recent_hits'      => 'Recent %d Hits',
+        'th_date'          => 'Date',
+        'th_time'          => 'Time',
+        'th_page'          => 'Page',
+        'th_referrer'      => 'Referrer',
+        'th_device'        => 'Device',
+        'th_country'       => 'Country',
         'show'             => 'Show ↓',
         'hide'             => 'Hide ↑',
         'no_data'          => 'No data yet — add the tracking snippet to your site to get started.',
@@ -252,6 +260,8 @@ $strings = [
         'win_30'           => 'Letzte 30 Tage',
         'vs_prev_7'        => 'vs. vorherige 7 Tage',
         'vs_prev_30'       => 'vs. vorherige 30 Tage',
+        'visitor_days'     => 'Besuchertage',
+        'tip_visitor_days' => 'Pro Tag gezählt: Wer an drei verschiedenen Tagen kommt, zählt dreifach. Der Besucher-Hash wird jede Nacht neu gesalzen, niemand wird über Tage hinweg wiedererkannt — genau deshalb ist das keine Personenzahl.',
         'trend'            => '-Tage-Verlauf',
         'top_pages'        => 'Meistbesuchte Seiten',
         'win_30_label'     => 'letzte 30 Tage',
@@ -271,6 +281,12 @@ $strings = [
         'ch_referral'      => 'Verweise',
         'tip_channels'     => 'Wie Besucher auf deine Seite kamen: direkt, über Suchmaschinen, Social Media oder andere Websites.',
         'recent_hits'      => 'Letzte %d Aufrufe',
+        'th_date'          => 'Datum',
+        'th_time'          => 'Uhrzeit',
+        'th_page'          => 'Seite',
+        'th_referrer'      => 'Quelle',
+        'th_device'        => 'Gerät',
+        'th_country'       => 'Land',
         'show'             => 'Anzeigen ↓',
         'hide'             => 'Ausblenden ↑',
         'no_data'          => 'Noch keine Daten — füge das Tracking-Snippet auf deiner Website ein.',
@@ -444,19 +460,45 @@ if ($authed) {
             $stats['pages'][$row['page']] = ['c' => $row['c'], 'title' => $row['title'] ?? ''];
         }
 
-        // Top pages, previous 30-day window (for the change column)
-        $res = $db->query("SELECT page, COUNT(*) as c FROM hits WHERE date >= '$prev30From' AND date <= '$prev30To' GROUP BY page ORDER BY c DESC LIMIT 8");
-        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-            $stats['pages_prev'][$row['page']] = $row['c'];
+        // Previous-window counts for exactly the pages listed above — not that
+        // window's own top 8. A page that has climbed into the current top 8
+        // from further down would be missing from such a list, the template
+        // would read the absent key as 0, and a page that went 45 -> 47 would
+        // be reported as "+47".
+        if ($stats['pages']) {
+            $names = array_keys($stats['pages']);
+            $holes = implode(',', array_fill(0, count($names), '?'));
+            $stmt  = $db->prepare(
+                "SELECT page, COUNT(*) AS c FROM hits
+                 WHERE date >= ? AND date <= ? AND page IN ($holes)
+                 GROUP BY page"
+            );
+            // prepare() returns false on error, and bindValue() on a boolean
+            // is a fatal that would take the whole dashboard down.
+            if ($stmt) {
+                $stmt->bindValue(1, $prev30From);
+                $stmt->bindValue(2, $prev30To);
+                foreach ($names as $i => $n) $stmt->bindValue($i + 3, $n);
+                $res = $stmt->execute();
+                while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+                    $stats['pages_prev'][$row['page']] = $row['c'];
+                }
+            }
         }
 
-        // Referrers (last 30 days, consistent with other cards)
-        $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$win30From' GROUP BY referrer ORDER BY c DESC LIMIT 8");
+        // Referrers (last 30 days, consistent with the other cards).
+        // Roll up to the host FIRST, rank afterwards. Grouping by full URL and
+        // cutting at LIMIT 8 before the rollup drops a domain that links from
+        // a dozen different URLs, however much traffic it sends in total —
+        // and it made this card contradict the channel card below, which
+        // aggregates the same rows without a limit.
+        $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$win30From' GROUP BY referrer");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $ref = preg_replace('/^www\./', '', parse_url($row['referrer'], PHP_URL_HOST) ?: $row['referrer']);
             $stats['referrers'][$ref] = ($stats['referrers'][$ref] ?? 0) + $row['c'];
         }
         arsort($stats['referrers']);
+        $stats['referrers'] = array_slice($stats['referrers'], 0, 8, true);
 
         // Traffic channels
         // Match against the referrer host (with any leading www. stripped)
@@ -511,8 +553,10 @@ if ($authed) {
             }
         }
 
-        // Hours
-        $res = $db->query("SELECT CAST(substr(time,1,2) AS INTEGER) as h, COUNT(*) as views, COUNT(DISTINCT vid) as uniq FROM hits GROUP BY h");
+        // Hours (last 30 days — same frame as every other windowed card).
+        // This used to read the entire history, so on a site running for years
+        // the stated peak hour described visitor behaviour from years ago.
+        $res = $db->query("SELECT CAST(substr(time,1,2) AS INTEGER) as h, COUNT(*) as views, COUNT(DISTINCT vid) as uniq FROM hits WHERE date >= '$win30From' GROUP BY h");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $h = (int) $row['h'];
             if ($h >= 0 && $h < 24) {
@@ -532,6 +576,12 @@ if ($authed) {
         // Strip anything that isn't a valid hostname character so LIKE
         // wildcards (% _) from a spoofed Host header can't leak through.
         $currentHost = preg_replace('/[^a-zA-Z0-9.\-]/', '', $_SERVER['HTTP_HOST'] ?? '');
+        // Only apply the host filter when the host is actually known. On an
+        // empty string the clause collapses to NOT LIKE '%%', which matches
+        // every row and would silently empty this card. The tracker already
+        // blanks same-host referrers on write, so this is a second line of
+        // defence, not the only one — dropping it when unusable is safe.
+        $hostClause = $currentHost !== '' ? "AND h.referrer NOT LIKE '%{$currentHost}%'" : '';
         $res = $db->query("
             SELECT h.page,
                    COUNT(*) AS c,
@@ -541,7 +591,7 @@ if ($authed) {
                     ORDER BY h2.id DESC LIMIT 1) AS title
             FROM hits h
             WHERE h.referrer != ''
-              AND h.referrer NOT LIKE '%{$currentHost}%'
+              $hostClause
               AND h.date >= '$win30From'
             GROUP BY h.page
             ORDER BY c DESC
@@ -656,7 +706,7 @@ if ($isLocked) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars($brandName) ?> · Analytics · <?= date("d M Y") ?></title>
+<title><?= htmlspecialchars($brandName) ?> · <?= htmlspecialchars($t['dashboard']) ?> · <?= date("d M Y") ?></title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -801,6 +851,9 @@ if ($isLocked) {
   /* Info tooltips */
   .card-title { display:flex; align-items:center; gap:.5rem; overflow:visible; }
   .card h2 { overflow:visible; }
+  /* Every windowed card states its own time frame, so a card read on its own
+     cannot be mistaken for an all-time figure. */
+  .card-window { font-size:.72rem; font-weight:400; color:var(--muted); }
   .info-btn {
     display:inline-flex; align-items:center; justify-content:center;
     width:12px; height:12px; border-radius:50%;
@@ -872,7 +925,7 @@ if ($isLocked) {
 <header>
   <div class="header-pima">
     <img src="<?= $pimaLogoDark ?>" alt="pima Analytics" style="height:28px;width:auto;display:block;">
-    <div class="header-tagline">measure more. manage less.</div>
+    <div class="header-tagline"><?= htmlspecialchars($t['tagline']) ?></div>
   </div>
   <div class="header-actions">
     <a href="/" class="btn-ghost"><?= $t['back_to_site'] ?></a>
@@ -952,19 +1005,19 @@ if ($isLocked) {
   <div class="kpi">
     <div class="kpi-label"><?= $t['win_7'] ?></div>
     <div class="kpi-value"><?= number_format($stats['views_7']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_7']) ?> <?= $t['visitors'] ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;" title="<?= htmlspecialchars($t['tip_visitor_days']) ?>"><?= number_format($stats['uniq_7']) ?> <?= $t['visitor_days'] ?></div>
     <div class="pill <?= $weekClass ?>"><?= $weekArrow ?><?= $weekDelta ?> <?= $t['vs_prev_7'] ?></div>
   </div>
   <div class="kpi">
     <div class="kpi-label"><?= $t['win_30'] ?></div>
     <div class="kpi-value"><?= number_format($stats['views_30']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_30']) ?> <?= $t['visitors'] ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;" title="<?= htmlspecialchars($t['tip_visitor_days']) ?>"><?= number_format($stats['uniq_30']) ?> <?= $t['visitor_days'] ?></div>
     <div class="pill <?= $monthClass ?>"><?= $monthArrow ?><?= $monthDelta ?> <?= $t['vs_prev_30'] ?></div>
   </div>
 </div>
 
 <div class="card">
-  <h2><?= TREND_DAYS ?><?= $t['trend'] ?></h2>
+  <h2><span class="card-title"><?= TREND_DAYS ?><?= $t['trend'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>">i</i></span></h2>
   <div class="trend-chart">
     <?php foreach ($stats['trend'] as $d => $trendItem):
       $hv = $trendMax > 0 ? max(2, round($trendItem['views'] / $trendMax * 100)) : 2;
@@ -982,7 +1035,7 @@ if ($isLocked) {
 
 <div class="grid-2">
   <div class="card">
-    <h2><span class="card-title"><?= $t['top_pages'] ?> <span style="font-size:.72rem;font-weight:400;color:var(--muted);"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['top_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>">i</i></span></h2>
     <?php if (empty($stats['pages'])): ?>
       <p class="no-data"><?= $t['no_pages'] ?></p>
     <?php else:
@@ -1017,7 +1070,7 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['referrers'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_referrers']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['referrers'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_referrers']) ?>">i</i></span></h2>
     <?php if (empty($stats['referrers'])): ?>
       <p class="no-data"><?= $t['no_referrers'] ?></p>
     <?php else:
@@ -1038,7 +1091,7 @@ if ($isLocked) {
 
 <div class="grid-3">
   <div class="card">
-    <h2><span class="card-title"><?= $t['entry_pages'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_entry']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['entry_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_entry']) ?>">i</i></span></h2>
     <?php if (empty($stats['entry_pages'])): ?>
       <p class="no-data"><?= $t['no_external'] ?></p>
     <?php else:
@@ -1068,7 +1121,7 @@ if ($isLocked) {
   </div>
 
     <div class="card">
-    <h2><span class="card-title"><?= $t['channels'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_channels']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['channels'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_channels']) ?>">i</i></span></h2>
     <?php
       $chTotal = array_sum($stats['channels']);
       $chLabels = ['direct' => $t['ch_direct'], 'organic' => $t['ch_organic'], 'social' => $t['ch_social'], 'referral' => $t['ch_referral']];
@@ -1086,9 +1139,9 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['browser_lang'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_lang']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['browser_lang'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_lang']) ?>">i</i></span></h2>
     <?php if (empty($stats['languages'])): ?>
-      <p class="no-data"><?= $t['no_pages'] ?></p>
+      <p class="no-data"><?= $t['no_lang'] ?></p>
     <?php else:
       $maxL = max($stats['languages']); $i = 1; ?>
       <ul class="rank-list">
@@ -1106,7 +1159,7 @@ if ($isLocked) {
 </div>
 <div class="grid-3">
   <div class="card">
-    <h2><span class="card-title"><?= $t['time_of_day'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_tod']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['time_of_day'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_tod']) ?>">i</i></span></h2>
     <div class="hours-chart">
       <?php for ($h = 0; $h < 24; $h++):
         $hh = $hourMax > 0 ? max(2, round($stats['hours'][$h]['views'] / $hourMax * 100)) : 2; ?>
@@ -1126,7 +1179,7 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['device_type'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_device']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['device_type'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_device']) ?>">i</i></span></h2>
     <?php
       $deviceIcons = [
         'desktop' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
@@ -1145,13 +1198,13 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['top_countries'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_countries']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['top_countries'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_countries']) ?>">i</i></span></h2>
     <?php if (empty($stats['countries'])): ?>
       <p class="no-data"><?= $t['no_geo'] ?></p>
     <?php else:
       $maxC = max($stats['countries']); $i = 1; ?>
       <ul class="rank-list">
-      <?php foreach (array_slice($stats['countries'], 0, 8, true) as $co => $c): ?>
+      <?php foreach ($stats['countries'] as $co => $c): ?>
         <li>
           <span class="rank-n"><?= $i++ ?></span>
           <span class="rank-label"><?= countryFlag($co) ?> <?= htmlspecialchars(countryName($co, $countryNames)) ?></span>
@@ -1173,7 +1226,7 @@ if ($isLocked) {
     <div class="tbl-wrap">
       <table>
         <thead>
-          <tr><th>Date</th><th>Time</th><th>Page</th><th>Referrer</th><th>Device</th><th>Country</th></tr>
+          <tr><th><?= $t['th_date'] ?></th><th><?= $t['th_time'] ?></th><th><?= $t['th_page'] ?></th><th><?= $t['th_referrer'] ?></th><th><?= $t['th_device'] ?></th><th><?= $t['th_country'] ?></th></tr>
         </thead>
         <tbody>
           <?php foreach ($stats['recent'] as $r): ?>
