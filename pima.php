@@ -176,20 +176,20 @@ $strings = [
         'wrong_password'   => '✗ Wrong password',
         'attempts_left'    => '%d attempt%s remaining before lockout.',
         'locked_out'       => 'Too many failed attempts. Try again in %s.',
-        'summary'                => 'Your site had <strong>%s pageviews</strong> this month.',
-        'summary_avg_per_day'     => 'An average of <strong>%s views</strong> per day this month.',
+        'summary'                => 'Your site had <strong>%s pageviews</strong> in the last 30 days.',
+        'summary_avg_per_day'     => 'An average of <strong>%s views</strong> per day.',
         'total_views'      => 'Total Views',
         'all_time'         => 'all time',
         'today'            => 'Today',
         'visitors'         => 'visitors',
-        'this_week'        => 'This Week',
-        'this_month'       => 'This Month',
-        'vs_last_week'     => 'vs last week',
-        'vs_last_month'    => 'vs last month',
+        'win_7'            => 'Last 7 Days',
+        'win_30'           => 'Last 30 Days',
+        'vs_prev_7'        => 'vs previous 7 days',
+        'vs_prev_30'       => 'vs previous 30 days',
         'trend'            => '-Day Trend',
         'top_pages'        => 'Top Pages',
-        'this_month_label' => 'this month',
-        'change_label'     => 'This month · change vs. last month',
+        'win_30_label'     => 'last 30 days',
+        'change_label'     => 'Last 30 days · change vs. previous 30 days',
         'referrers'        => 'Referrers',
         'entry_pages'      => 'Entry Pages',
         'browser_lang'     => 'Browser Language',
@@ -226,7 +226,7 @@ $strings = [
         'confirm_btn'      => 'Yes, delete everything',
         'powered_by'       => 'Powered by',
         'tip_trend'        => 'Daily pageviews over the last %d days.',
-        'tip_pages'        => 'Most visited pages this month, with change vs. last month.',
+        'tip_pages'        => 'Most visited pages in the last 30 days, with change vs. the previous 30 days.',
         'tip_referrers'    => 'Where your visitors come from — which websites linked to yours.',
         'tip_entry'        => 'The first page visitors see when arriving from an external source like Google or another website.',
         'tip_lang'         => 'The language set in your visitors\' browsers — useful to understand your audience.',
@@ -242,20 +242,20 @@ $strings = [
         'wrong_password'   => '✗ Falsches Passwort',
         'attempts_left'    => 'Noch %d Versuch%s bis zur Sperre.',
         'locked_out'       => 'Zu viele Fehlversuche. Bitte in %s erneut versuchen.',
-        'summary'                => 'Deine Website hatte diesen Monat <strong>%s Seitenaufrufe</strong>.',
-        'summary_avg_per_day'     => 'Im Schnitt <strong>%s Aufrufe</strong> pro Tag diesen Monat.',
+        'summary'                => 'Deine Website hatte in den letzten 30 Tagen <strong>%s Seitenaufrufe</strong>.',
+        'summary_avg_per_day'     => 'Im Schnitt <strong>%s Aufrufe</strong> pro Tag.',
         'total_views'      => 'Seitenaufrufe',
         'all_time'         => 'gesamt',
         'today'            => 'Heute',
         'visitors'         => 'Besucher',
-        'this_week'        => 'Diese Woche',
-        'this_month'       => 'Dieser Monat',
-        'vs_last_week'     => 'vs. letzte Woche',
-        'vs_last_month'    => 'vs. letzter Monat',
+        'win_7'            => 'Letzte 7 Tage',
+        'win_30'           => 'Letzte 30 Tage',
+        'vs_prev_7'        => 'vs. vorherige 7 Tage',
+        'vs_prev_30'       => 'vs. vorherige 30 Tage',
         'trend'            => '-Tage-Verlauf',
         'top_pages'        => 'Meistbesuchte Seiten',
-        'this_month_label' => 'diesen Monat',
-        'change_label'     => 'Dieser Monat · Änderung vs. letzter Monat',
+        'win_30_label'     => 'letzte 30 Tage',
+        'change_label'     => 'Letzte 30 Tage · Änderung vs. vorherige 30 Tage',
         'referrers'        => 'Quellen',
         'entry_pages'      => 'Einstiegsseiten',
         'browser_lang'     => 'Browsersprache',
@@ -292,7 +292,7 @@ $strings = [
         'confirm_btn'      => 'Ja, alles löschen',
         'powered_by'       => 'Erstellt mit',
         'tip_trend'        => 'Tägliche Seitenaufrufe der letzten %d Tage.',
-        'tip_pages'        => 'Meistbesuchte Seiten diesen Monat, mit Änderung vs. letzten Monat.',
+        'tip_pages'        => 'Meistbesuchte Seiten der letzten 30 Tage, mit Änderung vs. vorherige 30 Tage.',
         'tip_referrers'    => 'Woher deine Besucher kommen — welche Websites auf deine verlinkt haben.',
         'tip_entry'        => 'Die erste Seite, die Besucher sehen, wenn sie von einer externen Quelle wie Google kommen.',
         'tip_lang'         => 'Die in den Browsern deiner Besucher eingestellte Sprache.',
@@ -357,12 +357,13 @@ $stats = [
     'total'       => 0,
     'today'       => 0,
     'uniq_today'  => 0,
-    'uniq_week'   => 0,
-    'uniq_month'  => 0,
-    'this_week'   => 0,
-    'last_week'   => 0,
-    'this_month'  => 0,
-    'last_month'  => 0,
+    'uniq_7'        => 0,
+    'uniq_30'       => 0,
+    'views_7'       => 0,
+    'views_7_prev'  => 0,
+    'views_30'      => 0,
+    'views_30_prev' => 0,
+    'window_days'   => 1,
     'pages'       => [],
     'pages_prev'  => [],
     'referrers'   => [],
@@ -383,15 +384,20 @@ if ($authed) {
     if ($db) {
         $today      = date('Y-m-d');
         $trendFrom  = date('Y-m-d', strtotime('-' . (TREND_DAYS - 1) . ' days'));
-        $weekStart  = date('Y-m-d', strtotime('Monday this week'));
-        $prevStart  = date('Y-m-d', strtotime('Monday last week'));
-        $currentWeekDay = (int) date('N') - 1;
-        $prevEnd    = date('Y-m-d', strtotime('Monday last week + ' . $currentWeekDay . ' days'));
-        $monthStart = date('Y-m-01');
-        $lastMStart = date('Y-m-01', strtotime('first day of last month'));
-        // Compare same number of days as current month (fair comparison)
-        $currentDay = (int) date('j');
-        $lastMEnd   = date('Y-m-', strtotime('first day of last month')) . sprintf('%02d', $currentDay);
+
+        // Rolling windows, deliberately not calendar ones. A calendar month
+        // resets nine of the panels below to near zero at 00:00 on the 1st,
+        // which on a site doing a few dozen views a day makes the first week
+        // of every month unreadable. Rolling also keeps the sample size
+        // constant, so a comparison pill means the same thing on any day of
+        // the month — and it matches the trend chart, which was already
+        // rolling. Each window includes today, hence -6 / -29 and not -7 / -30.
+        $win7From   = date('Y-m-d', strtotime('-6 days'));
+        $prev7To    = date('Y-m-d', strtotime('-7 days'));
+        $prev7From  = date('Y-m-d', strtotime('-13 days'));
+        $win30From  = date('Y-m-d', strtotime('-29 days'));
+        $prev30To   = date('Y-m-d', strtotime('-30 days'));
+        $prev30From = date('Y-m-d', strtotime('-59 days'));
 
         $stats['total']      = (int) $db->querySingle('SELECT COUNT(*) FROM hits');
         $stats['today']      = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date = '$today'");
@@ -401,16 +407,24 @@ if ($authed) {
         // an "all time unique visitors" number would be meaningless and is
         // intentionally not computed.
         $stats['uniq_today'] = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date = '$today' AND vid != ''");
-        // uniq_week / uniq_month count distinct visitor-days (vid rotates daily),
+        // uniq_7 / uniq_30 count distinct visitor-days (vid rotates daily),
         // not distinct physical visitors — industry standard for cookie-free analytics.
-        $stats['uniq_week']  = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$weekStart' AND vid != ''");
-        $stats['uniq_month'] = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$monthStart' AND vid != ''");
-        $stats['this_week']  = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$weekStart'");
-        $stats['last_week']  = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$prevStart' AND date <= '$prevEnd'");
-        $stats['this_month'] = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$monthStart'");
-        $stats['last_month'] = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$lastMStart' AND date <= '$lastMEnd'");
+        $stats['uniq_7']        = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$win7From' AND vid != ''");
+        $stats['uniq_30']       = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$win30From' AND vid != ''");
+        $stats['views_7']       = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$win7From'");
+        $stats['views_7_prev']  = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$prev7From' AND date <= '$prev7To'");
+        $stats['views_30']      = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$win30From'");
+        $stats['views_30_prev'] = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$prev30From' AND date <= '$prev30To'");
 
-        // Top pages (this month) — title via correlated subquery picks the
+        // How many days the 30-day window actually covers. A site installed
+        // three days ago has three days of data, and dividing its views by a
+        // flat 30 would report an average that is ten times too low.
+        $firstDate = (string) $db->querySingle("SELECT MIN(date) FROM hits");
+        $stats['window_days'] = $firstDate
+            ? max(1, min(30, (int) floor((strtotime($today) - strtotime($firstDate)) / 86400) + 1))
+            : 1;
+
+        // Top pages (last 30 days) — title via correlated subquery picks the
         // most recent non-empty title for that page (chronological, not
         // alphabetic MAX).
         $res = $db->query("
@@ -421,7 +435,7 @@ if ($authed) {
                       AND h2.title IS NOT NULL AND h2.title != ''
                     ORDER BY h2.id DESC LIMIT 1) AS title
             FROM hits h
-            WHERE h.date >= '$monthStart'
+            WHERE h.date >= '$win30From'
             GROUP BY h.page
             ORDER BY c DESC
             LIMIT 8
@@ -430,14 +444,14 @@ if ($authed) {
             $stats['pages'][$row['page']] = ['c' => $row['c'], 'title' => $row['title'] ?? ''];
         }
 
-        // Top pages prev month (same days as current month)
-        $res = $db->query("SELECT page, COUNT(*) as c FROM hits WHERE date >= '$lastMStart' AND date <= '$lastMEnd' GROUP BY page ORDER BY c DESC LIMIT 8");
+        // Top pages, previous 30-day window (for the change column)
+        $res = $db->query("SELECT page, COUNT(*) as c FROM hits WHERE date >= '$prev30From' AND date <= '$prev30To' GROUP BY page ORDER BY c DESC LIMIT 8");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $stats['pages_prev'][$row['page']] = $row['c'];
         }
 
-        // Referrers (this month, consistent with other cards)
-        $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$monthStart' GROUP BY referrer ORDER BY c DESC LIMIT 8");
+        // Referrers (last 30 days, consistent with other cards)
+        $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$win30From' GROUP BY referrer ORDER BY c DESC LIMIT 8");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $ref = preg_replace('/^www\./', '', parse_url($row['referrer'], PHP_URL_HOST) ?: $row['referrer']);
             $stats['referrers'][$ref] = ($stats['referrers'][$ref] ?? 0) + $row['c'];
@@ -457,7 +471,7 @@ if ($authed) {
             }
             return false;
         };
-        $resC = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE date >= '$monthStart' GROUP BY referrer");
+        $resC = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE date >= '$win30From' GROUP BY referrer");
         while ($rowC = $resC->fetchArray(SQLITE3_ASSOC)) {
             $ref = strtolower($rowC['referrer'] ?? '');
             $c   = $rowC['c'];
@@ -472,15 +486,15 @@ if ($authed) {
             }
         }
 
-        // Devices (this month)
-        $res = $db->query("SELECT device, COUNT(*) as c FROM hits WHERE date >= '$monthStart' GROUP BY device");
+        // Devices (last 30 days)
+        $res = $db->query("SELECT device, COUNT(*) as c FROM hits WHERE date >= '$win30From' GROUP BY device");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $dev = $row['device'] ?: 'desktop';
             $stats['devices'][$dev] = ($stats['devices'][$dev] ?? 0) + $row['c'];
         }
 
-        // Countries (this month)
-        $res = $db->query("SELECT country, COUNT(*) as c FROM hits WHERE country != '' AND date >= '$monthStart' GROUP BY country ORDER BY c DESC LIMIT 8");
+        // Countries (last 30 days)
+        $res = $db->query("SELECT country, COUNT(*) as c FROM hits WHERE country != '' AND date >= '$win30From' GROUP BY country ORDER BY c DESC LIMIT 8");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $stats['countries'][$row['country']] = $row['c'];
         }
@@ -506,8 +520,8 @@ if ($authed) {
             }
         }
 
-        // Browser languages (this month)
-        $res = $db->query("SELECT lang, COUNT(*) as c FROM hits WHERE lang IS NOT NULL AND lang != '' AND date >= '$monthStart' GROUP BY lang ORDER BY c DESC LIMIT 8");
+        // Browser languages (last 30 days)
+        $res = $db->query("SELECT lang, COUNT(*) as c FROM hits WHERE lang IS NOT NULL AND lang != '' AND date >= '$win30From' GROUP BY lang ORDER BY c DESC LIMIT 8");
         if ($res) {
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
                 $stats['languages'][$row['lang']] = $row['c'];
@@ -528,7 +542,7 @@ if ($authed) {
             FROM hits h
             WHERE h.referrer != ''
               AND h.referrer NOT LIKE '%{$currentHost}%'
-              AND h.date >= '$monthStart'
+              AND h.date >= '$win30From'
             GROUP BY h.page
             ORDER BY c DESC
             LIMIT 8
@@ -883,8 +897,8 @@ if ($isLocked) {
 <?php else: ?>
 
 <?php
-  $weekDiff   = $stats['this_week']  - $stats['last_week'];
-  $monthDiff  = $stats['this_month'] - $stats['last_month'];
+  $weekDiff   = $stats['views_7']  - $stats['views_7_prev'];
+  $monthDiff  = $stats['views_30'] - $stats['views_30_prev'];
   $weekDelta  = $weekDiff  > 0 ? '+' . $weekDiff  : ($weekDiff  < 0 ? (string)$weekDiff  : '—');
   $monthDelta = $monthDiff > 0 ? '+' . $monthDiff : ($monthDiff < 0 ? (string)$monthDiff : '—');
   $weekClass  = $weekDiff  > 0 ? 'up' : ($weekDiff  < 0 ? 'down' : 'same');
@@ -903,11 +917,13 @@ if ($isLocked) {
 
 <?php
   $decSep = $lang === 'de' ? ',' : '.';
-  $avgPerDay = number_format($stats['this_month'] / max(1, (int) date('j')), 1, $decSep, '');
+  // Divide by the days the window actually covers, not by a flat 30 — a fresh
+  // install would otherwise report a tenth of its real daily average.
+  $avgPerDay = number_format($stats['views_30'] / max(1, (int) $stats['window_days']), 1, $decSep, '');
 ?>
 <div class="summary">
   <div class="summary-sentence">
-    <?= sprintf($t['summary'], number_format($stats['this_month'])) ?>
+    <?= sprintf($t['summary'], number_format($stats['views_30'])) ?>
   </div>
   <div class="summary-sentence" style="margin-top:.3rem;">
     <?= sprintf($t['summary_avg_per_day'], $avgPerDay) ?>
@@ -934,16 +950,16 @@ if ($isLocked) {
     <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_today']) ?> <?= $t['visitors'] ?></div>
   </div>
   <div class="kpi">
-    <div class="kpi-label"><?= $t['this_week'] ?></div>
-    <div class="kpi-value"><?= number_format($stats['this_week']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_week']) ?> <?= $t['visitors'] ?></div>
-    <div class="pill <?= $weekClass ?>"><?= $weekArrow ?><?= $weekDelta ?> <?= $t['vs_last_week'] ?></div>
+    <div class="kpi-label"><?= $t['win_7'] ?></div>
+    <div class="kpi-value"><?= number_format($stats['views_7']) ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_7']) ?> <?= $t['visitors'] ?></div>
+    <div class="pill <?= $weekClass ?>"><?= $weekArrow ?><?= $weekDelta ?> <?= $t['vs_prev_7'] ?></div>
   </div>
   <div class="kpi">
-    <div class="kpi-label"><?= $t['this_month'] ?></div>
-    <div class="kpi-value"><?= number_format($stats['this_month']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_month']) ?> <?= $t['visitors'] ?></div>
-    <div class="pill <?= $monthClass ?>"><?= $monthArrow ?><?= $monthDelta ?> <?= $t['vs_last_month'] ?></div>
+    <div class="kpi-label"><?= $t['win_30'] ?></div>
+    <div class="kpi-value"><?= number_format($stats['views_30']) ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_30']) ?> <?= $t['visitors'] ?></div>
+    <div class="pill <?= $monthClass ?>"><?= $monthArrow ?><?= $monthDelta ?> <?= $t['vs_prev_30'] ?></div>
   </div>
 </div>
 
@@ -966,7 +982,7 @@ if ($isLocked) {
 
 <div class="grid-2">
   <div class="card">
-    <h2><span class="card-title"><?= $t['top_pages'] ?> <span style="font-size:.72rem;font-weight:400;color:var(--muted);"><?= $t['this_month_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['top_pages'] ?> <span style="font-size:.72rem;font-weight:400;color:var(--muted);"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>">i</i></span></h2>
     <?php if (empty($stats['pages'])): ?>
       <p class="no-data"><?= $t['no_pages'] ?></p>
     <?php else:
