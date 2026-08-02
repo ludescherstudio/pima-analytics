@@ -42,8 +42,7 @@ function getCountry(string $ip): string {
     if (!GEO_ENABLED) return '';
     if ($ip === '' || in_array($ip, ['127.0.0.1', '::1'], true) || preg_match('/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/', $ip)) return 'local';
 
-    // File-based cache per IP (TTL 7 days) — keeps ip-api.com off the hot
-    // path when the service is slow or unreachable.
+    // File-based cache per IP, TTL 7 days.
     $cacheFile = dirname(DB_PATH) . '/.geo_cache.json';
     $ttl       = 7 * 86400;
     $cache     = [];
@@ -63,7 +62,7 @@ function getCountry(string $ip): string {
     }
 
     $cache[$ip] = ['c' => $country, 't' => time()];
-    // Prune stale entries so the file cannot grow unbounded.
+    // Prune stale entries.
     foreach ($cache as $k => $v) {
         if (($v['t'] ?? 0) < time() - $ttl) unset($cache[$k]);
     }
@@ -75,8 +74,7 @@ function visitorHash(string $ip, string $ua, string $date): string {
     $ipAnon   = preg_replace('/\.\d+$/', '.0', $ip);
     $saltFile = dirname(DB_PATH) . '/.salt_' . $date;
     if (!file_exists($saltFile)) {
-        // Lock and re-read, or two concurrent requests end up with different
-        // salts for the same day.
+        // Lock and re-read so the day's salt is written exactly once.
         $fh = @fopen($saltFile, 'c+');
         if ($fh) {
             @flock($fh, LOCK_EX);

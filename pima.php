@@ -6,7 +6,7 @@
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
 
-// Secure session cookie flags — must be set before session_start()
+// Must be set before session_start()
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['SERVER_PORT'] ?? 0) == 443)
     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
@@ -19,39 +19,29 @@ session_set_cookie_params([
 ]);
 session_start();
 
-// CSRF token, persistent per session — also covers the login form
+// CSRF token, persistent per session
 if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(16));
 }
 $csrf = $_SESSION['csrf'];
 $csrfOk = isset($_POST['csrf']) && hash_equals($csrf, (string) $_POST['csrf']);
 
-// Dashboard may show sensitive analytics — never cache.
 header('Cache-Control: no-store, no-cache, must-revalidate, private');
 header('Pragma: no-cache');
-
-// The Danger Zone is a one-click destructive action, and a CSRF token does not
-// survive clickjacking — the victim clicks the real button inside an invisible
-// frame and the token rides along. The dashboard is never framed legitimately.
 header('X-Frame-Options: DENY');
 header("Content-Security-Policy: frame-ancestors 'none'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 
 // ---- Brute-force protection (file-based, per IP) ----
-// Session-only tracking is bypassed by discarding the cookie, so attempts
-// persist in a small JSON file keyed by a hash of the IP.
 $maxAttempts = defined('MAX_LOGIN_ATTEMPTS') ? MAX_LOGIN_ATTEMPTS : 5;
 $lockoutSecs = defined('LOCKOUT_SECONDS')    ? LOCKOUT_SECONDS    : 900;
 
-// REMOTE_ADDR only, deliberately ignoring TRUST_PROXY: without a real proxy in
-// front, X-Forwarded-For is attacker-controlled and rotating it would buy
-// unlimited guesses. Tracking may trust the header; the lockout may not.
+// Keyed on REMOTE_ADDR, never on X-Forwarded-For, regardless of TRUST_PROXY.
 $ipKey    = substr(hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? 'unknown') . '|pima-lockout'), 0, 16);
 $lockFile = dirname(DB_PATH) . '/.lockout_' . $ipKey . '.json';
 
-// Unlocked read: only decides whether to show the lock screen, so a stale
-// value is harmless. The counter itself is updated under a lock below.
+// Unlocked read — drives the lock screen only.
 $lockState = ['attempts' => 0, 'locked_until' => 0];
 if (file_exists($lockFile)) {
     $decoded = json_decode(@file_get_contents($lockFile), true);
@@ -64,19 +54,15 @@ $attempts    = $lockState['attempts'];
 $lockedUntil = $lockState['locked_until'];
 $isLocked    = time() < $lockedUntil;
 
-// Prune by mtime, not by locked_until: a counter below MAX_LOGIN_ATTEMPTS
-// still carries locked_until = 0, so comparing that against time() would
-// delete every half-full counter and hand an attacker a free reset.
+// Prune by mtime — locked_until is still 0 on counters below the threshold.
 if (!file_exists($lockFile) && mt_rand(1, 50) === 1) {
     foreach (glob(dirname(DB_PATH) . '/.lockout_*.json') as $f) {
         if ((int) @filemtime($f) < time() - max(3600, $lockoutSecs * 2)) @unlink($f);
     }
 }
 
-// Record a failed attempt atomically and return the new state. The flock()
-// must span the read as well as the write — locking only the write lets
-// concurrent POSTs read the same value and write the same successor, so
-// parallel guesses count as one and the lockout never trips.
+// Records a failed attempt and returns the new state. The lock spans read
+// and write.
 $registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
     $fh = @fopen($lockFile, 'c+');
     if (!$fh) return [0, 0];                        // not writable → cannot throttle
@@ -93,8 +79,7 @@ $registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
     $json = (string) json_encode(['attempts' => $att, 'locked_until' => $until]);
     rewind($fh);
     ftruncate($fh, 0);
-    // Invalid JSON decodes to null, which reads as "no attempts" and silently
-    // disables the brake. Better empty than corrupt.
+    // Leave the file empty rather than half-written.
     if (fwrite($fh, $json) !== strlen($json)) ftruncate($fh, 0);
     fflush($fh);
     flock($fh, LOCK_UN);
@@ -104,8 +89,6 @@ $registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
 };
 
 // ---- Auth ----
-// Knocking on a locked account costs time too, or the lock screen is just a
-// fast 200 to hammer while waiting the window out.
 if ($isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     sleep(min(3, max(1, $lockedUntil - time())));
 }
@@ -126,8 +109,6 @@ if (!$isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['passwor
     } else {
         [$attempts, $lockedUntil] = $registerFail();
         $isLocked  = time() < $lockedUntil;
-        // Backoff before the lock trips, or the first MAX_LOGIN_ATTEMPTS
-        // guesses come for free at full speed.
         sleep(min(8, max(1, $attempts)));
         $authError = true;
     }
@@ -141,7 +122,7 @@ $authed = !empty($_SESSION['pima_auth']);
 
 // ---- Branding ----
 $brandColor   = defined('BRAND_COLOR')    ? BRAND_COLOR    : '#0d9488';
-// 3-stelliges Hex (#abc) auf 6-stellig normalisieren — Alpha-Suffixe (…22, …0a) brauchen 6 Stellen
+// Normalise 3-digit hex (#abc) to 6 — the alpha suffixes below need 6 digits
 if (preg_match('/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i', $brandColor, $m)) {
     $brandColor = '#' . $m[1].$m[1].$m[2].$m[2].$m[3].$m[3];
 }
@@ -389,9 +370,7 @@ if ($authed) {
         $today      = date('Y-m-d');
         $trendFrom  = date('Y-m-d', strtotime('-' . (TREND_DAYS - 1) . ' days'));
 
-        // Rolling, not calendar: a calendar month drops every windowed panel
-        // to near zero at 00:00 on the 1st, and pits unequal spans against
-        // each other in the deltas. Windows include today, hence -6 / -29.
+        // Rolling windows, each including today.
         $win7From   = date('Y-m-d', strtotime('-6 days'));
         $prev7To    = date('Y-m-d', strtotime('-7 days'));
         $prev7From  = date('Y-m-d', strtotime('-13 days'));
@@ -401,11 +380,10 @@ if ($authed) {
 
         $stats['total']      = (int) $db->querySingle('SELECT COUNT(*) FROM hits');
         $stats['today']      = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date = '$today'");
-        // The visitor-hash salt rotates nightly, so distinct vids within one
-        // day are distinct visitors. Across days the same person gets a new
-        // hash — an all-time unique count would be meaningless and is omitted.
+        // The visitor-hash salt rotates nightly: vids are comparable within a
+        // single day only, so there is no all-time unique count.
         $stats['uniq_today'] = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date = '$today' AND vid != ''");
-        // For the same reason these count visitor-days, not people.
+        // Visitor-days, not people.
         $stats['uniq_7']        = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$win7From' AND vid != ''");
         $stats['uniq_30']       = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$win30From' AND vid != ''");
         $stats['views_7']       = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$win7From'");
@@ -413,15 +391,13 @@ if ($authed) {
         $stats['views_30']      = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$win30From'");
         $stats['views_30_prev'] = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$prev30From' AND date <= '$prev30To'");
 
-        // Days the window actually covers, so a fresh install's daily average
-        // is not divided by a flat 30.
+        // Days the 30-day window actually covers.
         $firstDate = (string) $db->querySingle("SELECT MIN(date) FROM hits");
         $stats['window_days'] = $firstDate
             ? max(1, min(30, (int) floor((strtotime($today) - strtotime($firstDate)) / 86400) + 1))
             : 1;
 
-        // Top pages — the correlated subquery takes the most recent non-empty
-        // title for the page, which MAX() would get alphabetically instead.
+        // Top pages — subquery takes the most recent non-empty title.
         $res = $db->query("
             SELECT h.page,
                    COUNT(*) AS c,
@@ -439,9 +415,7 @@ if ($authed) {
             $stats['pages'][$row['page']] = ['c' => $row['c'], 'title' => $row['title'] ?? ''];
         }
 
-        // Previous-window counts for exactly the pages listed above. Using that
-        // window's own top 8 would omit any page that has since climbed into
-        // the list, and the template reads a missing key as zero.
+        // Previous-window counts for exactly the pages listed above.
         if ($stats['pages']) {
             $names = array_keys($stats['pages']);
             $holes = implode(',', array_fill(0, count($names), '?'));
@@ -461,9 +435,7 @@ if ($authed) {
             }
         }
 
-        // Roll up to the host first, rank afterwards. Cutting to the top 8 by
-        // full URL beforehand would drop a domain that links from many URLs,
-        // however much traffic it sends in total.
+        // Roll up to the host first, rank and cap afterwards.
         $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$win30From' GROUP BY referrer");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $ref = preg_replace('/^www\./', '', parse_url($row['referrer'], PHP_URL_HOST) ?: $row['referrer']);
@@ -472,8 +444,7 @@ if ($authed) {
         arsort($stats['referrers']);
         $stats['referrers'] = array_slice($stats['referrers'], 0, 8, true);
 
-        // Traffic channels. Matching the exact host or a subdomain of it keeps
-        // "fakefacebook.com" out of Social while letting "m.facebook.com" in.
+        // Traffic channels — matches the exact host or a subdomain of it.
         $searchEngines = ['google.com', 'google.de', 'google.at', 'google.ch', 'bing.com', 'duckduckgo.com', 'yahoo.com', 'ecosia.org', 'yandex.com', 'yandex.ru', 'baidu.com', 'qwant.com', 'startpage.com'];
         $socialNets    = ['facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'linkedin.com', 'tiktok.com', 'pinterest.com', 'youtube.com', 'reddit.com', 'whatsapp.com', 'telegram.org', 't.co'];
         $hostMatches = function(string $host, array $domains): bool {
@@ -522,8 +493,7 @@ if ($authed) {
             }
         }
 
-        // Hours — same 30-day frame as every other windowed card, so the peak
-        // describes current behaviour rather than the whole history.
+        // Hours
         $res = $db->query("SELECT CAST(substr(time,1,2) AS INTEGER) as h, COUNT(*) as views, COUNT(DISTINCT vid) as uniq FROM hits WHERE date >= '$win30From' GROUP BY h");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $h = (int) $row['h'];
@@ -540,13 +510,10 @@ if ($authed) {
             }
         }
 
-        // Entry pages (hits arriving from an external referrer). Strip
-        // non-hostname characters so LIKE wildcards from a spoofed Host
-        // header cannot leak into the pattern.
+        // Entry pages (external referrer). Strip non-hostname characters so
+        // no LIKE wildcard can reach the pattern.
         $currentHost = preg_replace('/[^a-zA-Z0-9.\-]/', '', $_SERVER['HTTP_HOST'] ?? '');
-        // Only filter when the host is known: on an empty string the clause
-        // becomes NOT LIKE '%%', which matches everything and would empty the
-        // card. The tracker already blanks same-host referrers on write.
+        // Only filter when the host is known — an empty pattern matches every row.
         $hostClause = $currentHost !== '' ? "AND h.referrer NOT LIKE '%{$currentHost}%'" : '';
         $res = $db->query("
             SELECT h.page,
@@ -776,7 +743,6 @@ if ($isLocked) {
   .rank-track { width:60px; height:5px; background:var(--bg); border-radius:3px; overflow:hidden; flex-shrink:0; }
   .rank-fill { height:100%; background:var(--accent); opacity:.6; border-radius:3px; }
   .rank-count { font-size:.8rem; font-weight:600; width:2.2rem; text-align:right; flex-shrink:0; }
-  /* delta replaced by delta-pill */
 
   .dev-row { display:flex; align-items:center; gap:.75rem; padding:.4rem 0; }
   .dev-label { font-size:.8rem; width:4.5rem; flex-shrink:0; }
