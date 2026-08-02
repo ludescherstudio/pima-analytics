@@ -6,7 +6,7 @@
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
 
-// Sichere Session-Cookie-Flags — vor session_start() setzen
+// Secure session cookie flags — must be set before session_start()
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['SERVER_PORT'] ?? 0) == 443)
     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
@@ -19,7 +19,7 @@ session_set_cookie_params([
 ]);
 session_start();
 
-// CSRF-Token persistent — auch fürs Login-Form
+// CSRF token, persistent per session — also covers the login form
 if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(16));
 }
@@ -30,35 +30,28 @@ $csrfOk = isset($_POST['csrf']) && hash_equals($csrf, (string) $_POST['csrf']);
 header('Cache-Control: no-store, no-cache, must-revalidate, private');
 header('Pragma: no-cache');
 
-// Protection headers. The dashboard carries a one-click destructive action
-// (Danger Zone → clear all data). A CSRF token does not help there: in a
-// clickjacking attack the victim clicks the real button inside an invisible
-// frame, so the token travels along and validates. 'frame-ancestors' is the
-// modern form, X-Frame-Options the one older browsers understand — both cost
-// nothing here, since the dashboard never needs to be framed.
+// The Danger Zone is a one-click destructive action, and a CSRF token does not
+// survive clickjacking — the victim clicks the real button inside an invisible
+// frame and the token rides along. The dashboard is never framed legitimately.
 header('X-Frame-Options: DENY');
 header("Content-Security-Policy: frame-ancestors 'none'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 
 // ---- Brute-force protection (file-based, per IP) ----
-// Session-only tracking can be bypassed by simply discarding the cookie,
-// so we persist attempts in a small JSON file keyed by a hash of the IP.
+// Session-only tracking is bypassed by discarding the cookie, so attempts
+// persist in a small JSON file keyed by a hash of the IP.
 $maxAttempts = defined('MAX_LOGIN_ATTEMPTS') ? MAX_LOGIN_ATTEMPTS : 5;
 $lockoutSecs = defined('LOCKOUT_SECONDS')    ? LOCKOUT_SECONDS    : 900;
 
-// The lockout is keyed on REMOTE_ADDR only — deliberately NOT on
-// X-Forwarded-For, even when TRUST_PROXY is on. A forwarded header is
-// attacker-controlled unless a trusted proxy really does sit in front, and a
-// misconfigured TRUST_PROXY would turn the lockout into a no-op: rotate the
-// header, get a fresh counter, guess forever. REMOTE_ADDR cannot be spoofed.
-// (Tracking still honours TRUST_PROXY — see pima-tracker.php. Getting a
-// visitor's country slightly wrong is cosmetic; losing the lockout is not.)
+// REMOTE_ADDR only, deliberately ignoring TRUST_PROXY: without a real proxy in
+// front, X-Forwarded-For is attacker-controlled and rotating it would buy
+// unlimited guesses. Tracking may trust the header; the lockout may not.
 $ipKey    = substr(hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? 'unknown') . '|pima-lockout'), 0, 16);
 $lockFile = dirname(DB_PATH) . '/.lockout_' . $ipKey . '.json';
 
-// Unlocked read — only decides whether to show the "locked" screen. A stale
-// read here is harmless; the counter itself is updated under a lock below.
+// Unlocked read: only decides whether to show the lock screen, so a stale
+// value is harmless. The counter itself is updated under a lock below.
 $lockState = ['attempts' => 0, 'locked_until' => 0];
 if (file_exists($lockFile)) {
     $decoded = json_decode(@file_get_contents($lockFile), true);
@@ -71,23 +64,19 @@ $attempts    = $lockState['attempts'];
 $lockedUntil = $lockState['locked_until'];
 $isLocked    = time() < $lockedUntil;
 
-// Periodic prune of stale lockout files. Keyed on the file's mtime, not on
-// locked_until: a counter that has not reached MAX_LOGIN_ATTEMPTS yet still
-// carries locked_until = 0, and comparing that against time() would delete
-// every half-full counter on sight — handing an attacker a free reset.
+// Prune by mtime, not by locked_until: a counter below MAX_LOGIN_ATTEMPTS
+// still carries locked_until = 0, so comparing that against time() would
+// delete every half-full counter and hand an attacker a free reset.
 if (!file_exists($lockFile) && mt_rand(1, 50) === 1) {
     foreach (glob(dirname(DB_PATH) . '/.lockout_*.json') as $f) {
         if ((int) @filemtime($f) < time() - max(3600, $lockoutSecs * 2)) @unlink($f);
     }
 }
 
-// Record a failed attempt atomically and return the new state.
-// 'c+' creates the file if absent and keeps it open for read+write, so one
-// flock() spans both. The previous version read the counter outside any lock
-// and wrote it back with file_put_contents(LOCK_EX) — that lock only covers
-// the write. Concurrent login POSTs therefore all read the same value and all
-// wrote the same successor: 20 parallel guesses counted as one and the lockout
-// never tripped.
+// Record a failed attempt atomically and return the new state. The flock()
+// must span the read as well as the write — locking only the write lets
+// concurrent POSTs read the same value and write the same successor, so
+// parallel guesses count as one and the lockout never trips.
 $registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
     $fh = @fopen($lockFile, 'c+');
     if (!$fh) return [0, 0];                        // not writable → cannot throttle
@@ -104,9 +93,8 @@ $registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
     $json = (string) json_encode(['attempts' => $att, 'locked_until' => $until]);
     rewind($fh);
     ftruncate($fh, 0);
-    // A partial write would leave invalid JSON. That decodes to null on the
-    // next read, the counter reads as empty and the brake is silently off —
-    // better to leave the file empty than corrupt.
+    // Invalid JSON decodes to null, which reads as "no attempts" and silently
+    // disables the brake. Better empty than corrupt.
     if (fwrite($fh, $json) !== strlen($json)) ftruncate($fh, 0);
     fflush($fh);
     flock($fh, LOCK_UN);
@@ -116,15 +104,15 @@ $registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
 };
 
 // ---- Auth ----
-// Hitting a locked account should cost time too, otherwise the lock screen is
-// just a fast 200 an attacker can hammer while waiting the window out.
+// Knocking on a locked account costs time too, or the lock screen is just a
+// fast 200 to hammer while waiting the window out.
 if ($isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     sleep(min(3, max(1, $lockedUntil - time())));
 }
 if (!$isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     $pw = (string) $_POST['password'];
     $stored = (string) STATS_PASSWORD;
-    // Akzeptiert sowohl Plaintext als auch password_hash() ($2y$, $argon, …)
+    // Accepts plaintext as well as password_hash() output ($2y$, $argon, …)
     $pwOk = (strlen($stored) > 3 && $stored[0] === '$')
         ? password_verify($pw, $stored)
         : hash_equals($stored, $pw);
@@ -138,8 +126,8 @@ if (!$isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['passwor
     } else {
         [$attempts, $lockedUntil] = $registerFail();
         $isLocked  = time() < $lockedUntil;
-        // Backoff inside the window as well: without it an attacker gets all
-        // MAX_LOGIN_ATTEMPTS guesses at full speed before the lock even starts.
+        // Backoff before the lock trips, or the first MAX_LOGIN_ATTEMPTS
+        // guesses come for free at full speed.
         sleep(min(8, max(1, $attempts)));
         $authError = true;
     }
@@ -401,13 +389,9 @@ if ($authed) {
         $today      = date('Y-m-d');
         $trendFrom  = date('Y-m-d', strtotime('-' . (TREND_DAYS - 1) . ' days'));
 
-        // Rolling windows, deliberately not calendar ones. A calendar month
-        // resets nine of the panels below to near zero at 00:00 on the 1st,
-        // which on a site doing a few dozen views a day makes the first week
-        // of every month unreadable. Rolling also keeps the sample size
-        // constant, so a comparison pill means the same thing on any day of
-        // the month — and it matches the trend chart, which was already
-        // rolling. Each window includes today, hence -6 / -29 and not -7 / -30.
+        // Rolling, not calendar: a calendar month drops every windowed panel
+        // to near zero at 00:00 on the 1st, and pits unequal spans against
+        // each other in the deltas. Windows include today, hence -6 / -29.
         $win7From   = date('Y-m-d', strtotime('-6 days'));
         $prev7To    = date('Y-m-d', strtotime('-7 days'));
         $prev7From  = date('Y-m-d', strtotime('-13 days'));
@@ -417,14 +401,11 @@ if ($authed) {
 
         $stats['total']      = (int) $db->querySingle('SELECT COUNT(*) FROM hits');
         $stats['today']      = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date = '$today'");
-        // uniq_today is accurate because the visitor-hash salt rotates daily —
-        // counting distinct vids within one day counts distinct visitors.
-        // Across multiple days the same physical visitor gets a new hash, so
-        // an "all time unique visitors" number would be meaningless and is
-        // intentionally not computed.
+        // The visitor-hash salt rotates nightly, so distinct vids within one
+        // day are distinct visitors. Across days the same person gets a new
+        // hash — an all-time unique count would be meaningless and is omitted.
         $stats['uniq_today'] = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date = '$today' AND vid != ''");
-        // uniq_7 / uniq_30 count distinct visitor-days (vid rotates daily),
-        // not distinct physical visitors — industry standard for cookie-free analytics.
+        // For the same reason these count visitor-days, not people.
         $stats['uniq_7']        = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$win7From' AND vid != ''");
         $stats['uniq_30']       = (int) $db->querySingle("SELECT COUNT(DISTINCT vid) FROM hits WHERE date >= '$win30From' AND vid != ''");
         $stats['views_7']       = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$win7From'");
@@ -432,17 +413,15 @@ if ($authed) {
         $stats['views_30']      = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$win30From'");
         $stats['views_30_prev'] = (int) $db->querySingle("SELECT COUNT(*) FROM hits WHERE date >= '$prev30From' AND date <= '$prev30To'");
 
-        // How many days the 30-day window actually covers. A site installed
-        // three days ago has three days of data, and dividing its views by a
-        // flat 30 would report an average that is ten times too low.
+        // Days the window actually covers, so a fresh install's daily average
+        // is not divided by a flat 30.
         $firstDate = (string) $db->querySingle("SELECT MIN(date) FROM hits");
         $stats['window_days'] = $firstDate
             ? max(1, min(30, (int) floor((strtotime($today) - strtotime($firstDate)) / 86400) + 1))
             : 1;
 
-        // Top pages (last 30 days) — title via correlated subquery picks the
-        // most recent non-empty title for that page (chronological, not
-        // alphabetic MAX).
+        // Top pages — the correlated subquery takes the most recent non-empty
+        // title for the page, which MAX() would get alphabetically instead.
         $res = $db->query("
             SELECT h.page,
                    COUNT(*) AS c,
@@ -460,11 +439,9 @@ if ($authed) {
             $stats['pages'][$row['page']] = ['c' => $row['c'], 'title' => $row['title'] ?? ''];
         }
 
-        // Previous-window counts for exactly the pages listed above — not that
-        // window's own top 8. A page that has climbed into the current top 8
-        // from further down would be missing from such a list, the template
-        // would read the absent key as 0, and a page that went 45 -> 47 would
-        // be reported as "+47".
+        // Previous-window counts for exactly the pages listed above. Using that
+        // window's own top 8 would omit any page that has since climbed into
+        // the list, and the template reads a missing key as zero.
         if ($stats['pages']) {
             $names = array_keys($stats['pages']);
             $holes = implode(',', array_fill(0, count($names), '?'));
@@ -473,8 +450,6 @@ if ($authed) {
                  WHERE date >= ? AND date <= ? AND page IN ($holes)
                  GROUP BY page"
             );
-            // prepare() returns false on error, and bindValue() on a boolean
-            // is a fatal that would take the whole dashboard down.
             if ($stmt) {
                 $stmt->bindValue(1, $prev30From);
                 $stmt->bindValue(2, $prev30To);
@@ -486,12 +461,9 @@ if ($authed) {
             }
         }
 
-        // Referrers (last 30 days, consistent with the other cards).
-        // Roll up to the host FIRST, rank afterwards. Grouping by full URL and
-        // cutting at LIMIT 8 before the rollup drops a domain that links from
-        // a dozen different URLs, however much traffic it sends in total —
-        // and it made this card contradict the channel card below, which
-        // aggregates the same rows without a limit.
+        // Roll up to the host first, rank afterwards. Cutting to the top 8 by
+        // full URL beforehand would drop a domain that links from many URLs,
+        // however much traffic it sends in total.
         $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$win30From' GROUP BY referrer");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $ref = preg_replace('/^www\./', '', parse_url($row['referrer'], PHP_URL_HOST) ?: $row['referrer']);
@@ -500,11 +472,8 @@ if ($authed) {
         arsort($stats['referrers']);
         $stats['referrers'] = array_slice($stats['referrers'], 0, 8, true);
 
-        // Traffic channels
-        // Match against the referrer host (with any leading www. stripped)
-        // and only accept the exact host or one of its subdomains — that way
-        // "fakefacebook.com" doesn't get counted as Social, but
-        // "m.facebook.com" does.
+        // Traffic channels. Matching the exact host or a subdomain of it keeps
+        // "fakefacebook.com" out of Social while letting "m.facebook.com" in.
         $searchEngines = ['google.com', 'google.de', 'google.at', 'google.ch', 'bing.com', 'duckduckgo.com', 'yahoo.com', 'ecosia.org', 'yandex.com', 'yandex.ru', 'baidu.com', 'qwant.com', 'startpage.com'];
         $socialNets    = ['facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'linkedin.com', 'tiktok.com', 'pinterest.com', 'youtube.com', 'reddit.com', 'whatsapp.com', 'telegram.org', 't.co'];
         $hostMatches = function(string $host, array $domains): bool {
@@ -528,14 +497,14 @@ if ($authed) {
             }
         }
 
-        // Devices (last 30 days)
+        // Devices
         $res = $db->query("SELECT device, COUNT(*) as c FROM hits WHERE date >= '$win30From' GROUP BY device");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $dev = $row['device'] ?: 'desktop';
             $stats['devices'][$dev] = ($stats['devices'][$dev] ?? 0) + $row['c'];
         }
 
-        // Countries (last 30 days)
+        // Countries
         $res = $db->query("SELECT country, COUNT(*) as c FROM hits WHERE country != '' AND date >= '$win30From' GROUP BY country ORDER BY c DESC LIMIT 8");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $stats['countries'][$row['country']] = $row['c'];
@@ -553,9 +522,8 @@ if ($authed) {
             }
         }
 
-        // Hours (last 30 days — same frame as every other windowed card).
-        // This used to read the entire history, so on a site running for years
-        // the stated peak hour described visitor behaviour from years ago.
+        // Hours — same 30-day frame as every other windowed card, so the peak
+        // describes current behaviour rather than the whole history.
         $res = $db->query("SELECT CAST(substr(time,1,2) AS INTEGER) as h, COUNT(*) as views, COUNT(DISTINCT vid) as uniq FROM hits WHERE date >= '$win30From' GROUP BY h");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $h = (int) $row['h'];
@@ -564,7 +532,7 @@ if ($authed) {
             }
         }
 
-        // Browser languages (last 30 days)
+        // Browser languages
         $res = $db->query("SELECT lang, COUNT(*) as c FROM hits WHERE lang IS NOT NULL AND lang != '' AND date >= '$win30From' GROUP BY lang ORDER BY c DESC LIMIT 8");
         if ($res) {
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
@@ -572,15 +540,13 @@ if ($authed) {
             }
         }
 
-        // Entry pages (hits where referrer is external)
-        // Strip anything that isn't a valid hostname character so LIKE
-        // wildcards (% _) from a spoofed Host header can't leak through.
+        // Entry pages (hits arriving from an external referrer). Strip
+        // non-hostname characters so LIKE wildcards from a spoofed Host
+        // header cannot leak into the pattern.
         $currentHost = preg_replace('/[^a-zA-Z0-9.\-]/', '', $_SERVER['HTTP_HOST'] ?? '');
-        // Only apply the host filter when the host is actually known. On an
-        // empty string the clause collapses to NOT LIKE '%%', which matches
-        // every row and would silently empty this card. The tracker already
-        // blanks same-host referrers on write, so this is a second line of
-        // defence, not the only one — dropping it when unusable is safe.
+        // Only filter when the host is known: on an empty string the clause
+        // becomes NOT LIKE '%%', which matches everything and would empty the
+        // card. The tracker already blanks same-host referrers on write.
         $hostClause = $currentHost !== '' ? "AND h.referrer NOT LIKE '%{$currentHost}%'" : '';
         $res = $db->query("
             SELECT h.page,
@@ -851,8 +817,6 @@ if ($isLocked) {
   /* Info tooltips */
   .card-title { display:flex; align-items:center; gap:.5rem; overflow:visible; }
   .card h2 { overflow:visible; }
-  /* Every windowed card states its own time frame, so a card read on its own
-     cannot be mistaken for an all-time figure. */
   .card-window { font-size:.72rem; font-weight:400; color:var(--muted); }
   .info-btn {
     display:inline-flex; align-items:center; justify-content:center;
@@ -970,8 +934,6 @@ if ($isLocked) {
 
 <?php
   $decSep = $lang === 'de' ? ',' : '.';
-  // Divide by the days the window actually covers, not by a flat 30 — a fresh
-  // install would otherwise report a tenth of its real daily average.
   $avgPerDay = number_format($stats['views_30'] / max(1, (int) $stats['window_days']), 1, $decSep, '');
 ?>
 <div class="summary">
