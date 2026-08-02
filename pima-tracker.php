@@ -42,9 +42,8 @@ function getCountry(string $ip): string {
     if (!GEO_ENABLED) return '';
     if ($ip === '' || in_array($ip, ['127.0.0.1', '::1'], true) || preg_match('/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/', $ip)) return 'local';
 
-    // ---- File-based cache per IP (TTL 7 days) ----
-    // Avoids hitting ip-api.com on every hit and keeps page latency low
-    // if the service is slow or unreachable.
+    // File-based cache per IP (TTL 7 days) — keeps ip-api.com off the hot
+    // path when the service is slow or unreachable.
     $cacheFile = dirname(DB_PATH) . '/.geo_cache.json';
     $ttl       = 7 * 86400;
     $cache     = [];
@@ -76,8 +75,8 @@ function visitorHash(string $ip, string $ua, string $date): string {
     $ipAnon   = preg_replace('/\.\d+$/', '.0', $ip);
     $saltFile = dirname(DB_PATH) . '/.salt_' . $date;
     if (!file_exists($saltFile)) {
-        // LOCK_EX + re-read so two concurrent requests can't race and end up
-        // with different salts on the same day.
+        // Lock and re-read, or two concurrent requests end up with different
+        // salts for the same day.
         $fh = @fopen($saltFile, 'c+');
         if ($fh) {
             @flock($fh, LOCK_EX);
@@ -142,7 +141,7 @@ function initDb(): SQLite3 {
 // ---- Main ----
 
 $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-// REMOTE_ADDR ist nicht spoofbar; X-Forwarded-For nur lesen, wenn explizit erlaubt
+// REMOTE_ADDR cannot be spoofed; read X-Forwarded-For only when allowed
 $trustProxy = defined('TRUST_PROXY') ? TRUST_PROXY : false;
 $ip = ($trustProxy && !empty($_SERVER['HTTP_X_FORWARDED_FOR']))
     ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
