@@ -259,10 +259,17 @@ define('LOCKOUT_SECONDS',    900);  // Lockout duration (900 = 15 minutes)
 
 ## Dashboard
 
-- **Summary** — Monthly pageviews and estimated visitors at a glance
-- **KPIs** — Total views, today, this week, this month (with week/month deltas)
+- **Summary** — Pageviews over the last 30 days and the daily average
+- **KPIs** — Total views, today, last 7 days, last 30 days (each with a delta
+  against the preceding window of the same length)
 - **14-day trend** — Daily bar chart
-- **Top pages** — Ranked with week-over-week delta
+- **Top pages** — Ranked, with the change against the previous 30 days
+
+All windowed panels roll rather than following the calendar: "last 30 days"
+always means the 30 days up to and including today. A calendar month would
+drop every one of these panels to near zero at midnight on the 1st, which on a
+low-traffic site makes the first week of each month unreadable — and it would
+make the deltas compare windows of different lengths.
 - **Referrers** — Where your visitors come from
 - **Entry pages** — First pages seen by visitors arriving from external sources
 - **Browser language** — Language distribution of your visitors
