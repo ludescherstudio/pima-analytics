@@ -29,10 +29,11 @@ alongside client work — timelines are best-effort, not contractual.
 - Stored XSS: a value recorded by `pima-tracker.php` that executes when the
   dashboard renders it. The tracker accepts visitor-controlled strings, so
   this is the most interesting surface in the project
-- CSV injection surviving the export (`=`, `+`, `-`, `@` are stripped at write
-  time — a bypass is a bug)
+- CSV injection surviving the export (`=`, `+`, `-`, `@`, including leading
+  whitespace, are neutralised at write and export time — a bypass is a bug)
 - De-anonymising a visitor from stored data. pima stores no IP addresses; the
-  visitor hash is salted per day and the salt is discarded after two days
+  visitor hash is salted per day and the salt is discarded after two days.
+  Geo-cache and rate-limit keys are keyed digests, never raw IPs
 
 **Out of scope**
 
@@ -43,6 +44,7 @@ alongside client work — timelines are best-effort, not contractual.
   HTML source. The token is embedded in every tracked page and is therefore
   **public by design** — it raises the bar against drive-by noise, nothing
   more. It authorises *writing* hits, never *reading* the dashboard.
+  Rate limiting reduces abuse volume but cannot make a public token secret.
 - Missing `.htaccess` hardening. Denying web access to `pima-core.php` and
   `pima-cache/` is a documented install step (see `pima-AGENT.md`, Step 6), and
   on Nginx an equivalent `deny` rule is required. A server that skips it is a
@@ -68,7 +70,8 @@ alongside client work — timelines are best-effort, not contractual.
 - Serve the dashboard over HTTPS — session cookies only get the `secure` flag
   when the request is HTTPS.
 - Leave `TRUST_PROXY` off unless a trusted reverse proxy really does sit in
-  front of the site. It only affects tracking; the login lockout always keys on
-  `REMOTE_ADDR` so that a wrong setting here cannot be used to escape it.
+  front of the site, and list every permitted proxy address in
+  `TRUSTED_PROXY_IPS`. The login lockout always keys on `REMOTE_ADDR`.
+- Review `DATA_RETENTION_DAYS`; the shipped default removes rows after 365 days.
 - Leave `ADVANCED_MODE` off in normal operation. It enables the Danger Zone,
   which clears the whole database in one click.

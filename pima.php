@@ -6,10 +6,18 @@
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
 
-// Must be set before session_start()
+// Must be set before session_start(). Proxy headers are trusted only from an
+// explicitly configured proxy address.
+$remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? '';
+$trustedProxy = defined('TRUST_PROXY') && TRUST_PROXY
+    && defined('TRUSTED_PROXY_IPS') && in_array($remoteAddr, TRUSTED_PROXY_IPS, true);
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['SERVER_PORT'] ?? 0) == 443)
-    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    || ($trustedProxy && (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'));
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+$sessionDir = dirname(DB_PATH);
+if (is_dir($sessionDir) && is_writable($sessionDir)) ini_set('session.save_path', $sessionDir);
 session_set_cookie_params([
     'lifetime' => 0,
     'path'     => '/',
@@ -19,101 +27,139 @@ session_set_cookie_params([
 ]);
 session_start();
 
+// Expire idle sessions and sessions created with an older dashboard password.
+$sessionIdle = defined('SESSION_IDLE_SECONDS') ? max(60, (int) SESSION_IDLE_SECONDS) : 1800;
+$authKey     = hash('sha256', (string) STATS_PASSWORD);
+if (!empty($_SESSION['pima_auth'])) {
+    $expired = empty($_SESSION['pima_last_activity'])
+        || (int) $_SESSION['pima_last_activity'] < time() - $sessionIdle;
+    $passwordChanged = !isset($_SESSION['pima_auth_key'])
+        || !hash_equals($authKey, (string) $_SESSION['pima_auth_key']);
+    if ($expired || $passwordChanged) {
+        unset($_SESSION['pima_auth'], $_SESSION['pima_auth_key'], $_SESSION['pima_last_activity']);
+    } else {
+        $_SESSION['pima_last_activity'] = time();
+    }
+}
+
 // CSRF token, persistent per session
 if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(16));
 }
 $csrf = $_SESSION['csrf'];
-$csrfOk = isset($_POST['csrf']) && hash_equals($csrf, (string) $_POST['csrf']);
+$csrfOk = isset($_POST['csrf']) && is_scalar($_POST['csrf'])
+    && hash_equals($csrf, (string) $_POST['csrf']);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, private');
 header('Pragma: no-cache');
 header('X-Frame-Options: DENY');
-header("Content-Security-Policy: frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+if ($isHttps) header('Strict-Transport-Security: max-age=31536000');
 
 // ---- Brute-force protection (file-based, per IP) ----
 $maxAttempts = defined('MAX_LOGIN_ATTEMPTS') ? MAX_LOGIN_ATTEMPTS : 5;
 $lockoutSecs = defined('LOCKOUT_SECONDS')    ? LOCKOUT_SECONDS    : 900;
 
 // Keyed on REMOTE_ADDR, never on X-Forwarded-For, regardless of TRUST_PROXY.
-$ipKey    = substr(hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? 'unknown') . '|pima-lockout'), 0, 16);
+$ipKey    = substr(hash('sha256', $remoteAddr . '|pima-lockout'), 0, 16);
 $lockFile = dirname(DB_PATH) . '/.lockout_' . $ipKey . '.json';
 
 // Unlocked read — drives the lock screen only.
 $lockState = ['attempts' => 0, 'locked_until' => 0];
 if (file_exists($lockFile)) {
-    $decoded = json_decode(@file_get_contents($lockFile), true);
-    if (is_array($decoded)) {
-        $lockState['attempts']     = (int) ($decoded['attempts']     ?? 0);
-        $lockState['locked_until'] = (int) ($decoded['locked_until'] ?? 0);
+    $fh = @fopen($lockFile, 'r');
+    if ($fh && @flock($fh, LOCK_SH)) {
+        $decoded = json_decode((string) stream_get_contents($fh), true);
+        flock($fh, LOCK_UN);
+        if (is_array($decoded)) {
+            $lockState['attempts']     = (int) ($decoded['attempts'] ?? 0);
+            $lockState['locked_until'] = (int) ($decoded['locked_until'] ?? 0);
+        }
     }
+    if ($fh) fclose($fh);
+}
+$now = time();
+if ($lockState['locked_until'] > 0 && $lockState['locked_until'] <= $now) {
+    $lockState = ['attempts' => 0, 'locked_until' => 0];
 }
 $attempts    = $lockState['attempts'];
 $lockedUntil = $lockState['locked_until'];
-$isLocked    = time() < $lockedUntil;
+$isLocked    = $now < $lockedUntil;
 
 // Prune by mtime — locked_until is still 0 on counters below the threshold.
-if (!file_exists($lockFile) && mt_rand(1, 50) === 1) {
+if (mt_rand(1, 50) === 1) {
     foreach (glob(dirname(DB_PATH) . '/.lockout_*.json') as $f) {
         if ((int) @filemtime($f) < time() - max(3600, $lockoutSecs * 2)) @unlink($f);
     }
 }
 
-// Records a failed attempt and returns the new state. The lock spans read
-// and write.
-$registerFail = function () use ($lockFile, $maxAttempts, $lockoutSecs): array {
-    $fh = @fopen($lockFile, 'c+');
-    if (!$fh) return [0, 0];                        // not writable → cannot throttle
-    if (!flock($fh, LOCK_EX)) { fclose($fh); return [0, 0]; }
-
-    $raw     = stream_get_contents($fh);
-    $decoded = ($raw !== false && $raw !== '') ? json_decode($raw, true) : null;
-    $att     = is_array($decoded) ? (int) ($decoded['attempts']     ?? 0) : 0;
-    $until   = is_array($decoded) ? (int) ($decoded['locked_until'] ?? 0) : 0;
-
-    $att++;
-    if ($att >= $maxAttempts) $until = time() + $lockoutSecs;
-
-    $json = (string) json_encode(['attempts' => $att, 'locked_until' => $until]);
-    rewind($fh);
-    ftruncate($fh, 0);
-    // Leave the file empty rather than half-written.
-    if (fwrite($fh, $json) !== strlen($json)) ftruncate($fh, 0);
-    fflush($fh);
-    flock($fh, LOCK_UN);
-    fclose($fh);
-
-    return [$att, $until];
-};
-
 // ---- Auth ----
-if ($isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
-    sleep(min(3, max(1, $lockedUntil - time())));
-}
-if (!$isLocked && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
-    $pw = (string) $_POST['password'];
-    $stored = (string) STATS_PASSWORD;
-    // Accepts plaintext as well as password_hash() output ($2y$, $argon, …)
-    $pwOk = (strlen($stored) > 3 && $stored[0] === '$')
-        ? password_verify($pw, $stored)
-        : hash_equals($stored, $pw);
-    if ($csrfOk && $pwOk) {
-        session_regenerate_id(true);
-        $_SESSION['pima_auth'] = true;
-        $_SESSION['csrf']      = bin2hex(random_bytes(16));
-        $csrf                  = $_SESSION['csrf'];
-        @unlink($lockFile);
-        $attempts = 0; $lockedUntil = 0;
-    } else {
-        [$attempts, $lockedUntil] = $registerFail();
-        $isLocked  = time() < $lockedUntil;
-        sleep(min(8, max(1, $attempts)));
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
+    if (!$csrfOk) {
+        // Invalid cross-site posts do not consume another person's IP quota.
         $authError = true;
+        sleep(1);
+    } else {
+        $fh = @fopen($lockFile, 'c+');
+        if (!$fh || !@flock($fh, LOCK_EX)) {
+            if ($fh) fclose($fh);
+            $authUnavailable = true;
+        } else {
+            $decoded = json_decode((string) stream_get_contents($fh), true);
+            $attempts = is_array($decoded) ? (int) ($decoded['attempts'] ?? 0) : 0;
+            $lockedUntil = is_array($decoded) ? (int) ($decoded['locked_until'] ?? 0) : 0;
+            if ($lockedUntil > 0 && $lockedUntil <= time()) {
+                $attempts = 0;
+                $lockedUntil = 0;
+            }
+
+            if (time() < $lockedUntil) {
+                $isLocked = true;
+            } else {
+                $pw     = is_scalar($_POST['password']) ? (string) $_POST['password'] : '';
+                $stored = (string) STATS_PASSWORD;
+                $pwOk   = (strlen($stored) > 3 && $stored[0] === '$')
+                    ? password_verify($pw, $stored)
+                    : hash_equals($stored, $pw);
+                if ($pwOk) {
+                    $attempts = 0;
+                    $lockedUntil = 0;
+                    session_regenerate_id(true);
+                    $_SESSION['pima_auth']          = true;
+                    $_SESSION['pima_auth_key']      = $authKey;
+                    $_SESSION['pima_last_activity'] = time();
+                    $_SESSION['csrf']               = bin2hex(random_bytes(16));
+                    $csrf = $_SESSION['csrf'];
+                } else {
+                    $attempts++;
+                    if ($attempts >= $maxAttempts) $lockedUntil = time() + $lockoutSecs;
+                    $isLocked = time() < $lockedUntil;
+                    $authError = true;
+                }
+            }
+
+            $json = (string) json_encode(['attempts' => $attempts, 'locked_until' => $lockedUntil]);
+            rewind($fh);
+            ftruncate($fh, 0);
+            if (fwrite($fh, $json) !== strlen($json)) $authUnavailable = true;
+            fflush($fh);
+            flock($fh, LOCK_UN);
+            fclose($fh);
+        }
+
+        if ($isLocked) sleep(min(3, max(1, $lockedUntil - time())));
+        elseif (!empty($authError)) sleep(min(8, max(1, $attempts)));
     }
 }
-if (isset($_GET['logout'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout']) && $csrfOk) {
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    }
     session_destroy();
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
     exit;
@@ -143,14 +189,17 @@ $strings = [
         'tagline'          => 'measure more. manage less.',
         'login_btn'        => 'Login',
         'wrong_password'   => '✗ Wrong password',
+        'auth_unavailable' => 'Login protection is temporarily unavailable. Check that pima-cache is writable.',
         'attempts_left'    => '%d attempt%s remaining before lockout.',
         'locked_out'       => 'Too many failed attempts. Try again in %s.',
         'summary'                => 'Your site had <strong>%s pageviews</strong> in the last 30 days.',
-        'summary_avg_per_day'     => 'An average of <strong>%s views</strong> per day.',
+        'summary_avg_full'        => 'An average of <strong>%s views</strong> per calendar day in this period.',
+        'summary_avg_partial'     => 'An average of <strong>%s views</strong> per calendar day since tracking began (%d day%s).',
         'total_views'      => 'Total Views',
         'all_time'         => 'all time',
         'today'            => 'Today',
         'visitors'         => 'visitors',
+        'tip_daily_visitors' => 'Estimated visitors today. Multiple pageviews with the same daily anonymous identifier count once.',
         'win_7'            => 'Last 7 Days',
         'win_30'           => 'Last 30 Days',
         'vs_prev_7'        => 'vs previous 7 days',
@@ -160,7 +209,7 @@ $strings = [
         'trend'            => '-Day Trend',
         'top_pages'        => 'Top Pages',
         'win_30_label'     => 'last 30 days',
-        'change_label'     => 'Last 30 days · change vs. previous 30 days',
+        'change_label'     => 'Last 30 days · absolute change in pageviews vs. previous 30 days',
         'referrers'        => 'Referrers',
         'entry_pages'      => 'Entry Pages',
         'browser_lang'     => 'Browser Language',
@@ -174,7 +223,7 @@ $strings = [
         'ch_organic'       => 'Organic Search',
         'ch_social'        => 'Social',
         'ch_referral'      => 'Referral',
-        'tip_channels'     => 'How visitors found your site: directly, via search engines, social media, or other websites.',
+        'tip_channels'     => 'Share of entries in the last 30 days: direct, search, social media, or another website. Internal navigation is excluded.',
         'recent_hits'      => 'Recent %d Hits',
         'th_date'          => 'Date',
         'th_time'          => 'Time',
@@ -188,9 +237,15 @@ $strings = [
         'no_pages'         => 'No data yet',
         'no_referrers'     => 'No referrers yet',
         'no_external'      => 'No external traffic yet',
+        'no_channels'      => 'No classified entries yet',
         'no_lang'          => 'No data yet',
         'no_geo'           => 'Geo disabled or no data',
-        'entry_note'       => 'First pages seen by visitors from external sources',
+        'entry_note'       => 'External entries in the last 30 days; reloads can count again',
+        'visitor_days_note'=> 'Visitor-days in the last 30 days; one visitor can count once per day.',
+        'known_values_note'=> 'Visitor-days with a detected value; unknown values are excluded.',
+        'device_desktop'   => 'Desktop',
+        'device_mobile'    => 'Mobile',
+        'device_tablet'    => 'Tablet',
         'refresh'          => 'Refresh',
         'logout'           => 'Logout',
         'back_to_site'     => '← Back to site',
@@ -202,14 +257,14 @@ $strings = [
         'confirm_msg'      => 'This will permanently delete all %s rows. Are you sure?',
         'confirm_btn'      => 'Yes, delete everything',
         'powered_by'       => 'Powered by',
-        'tip_trend'        => 'Daily pageviews over the last %d days.',
+        'tip_trend'        => 'Daily pageviews and estimated daily visitors over the last %d days.',
         'tip_pages'        => 'Most visited pages in the last 30 days, with change vs. the previous 30 days.',
-        'tip_referrers'    => 'Where your visitors come from — which websites linked to yours.',
-        'tip_entry'        => 'The first page visitors see when arriving from an external source like Google or another website.',
-        'tip_lang'         => 'The language set in your visitors\' browsers — useful to understand your audience.',
-        'tip_tod'          => 'When your visitors are most active. Hover over a bar to see the exact hour and view count.',
-        'tip_device'       => 'Whether visitors are using a desktop, mobile phone, or tablet.',
-        'tip_countries'    => 'Where your visitors are located, detected via their IP address. The IP itself is never stored.',
+        'tip_referrers'    => 'External websites that generated entries in the last 30 days. Counts are entries, not people.',
+        'tip_entry'        => 'Pages opened with an external referrer in the last 30 days. Direct entries are not included.',
+        'tip_lang'         => 'Browser language by visitor-day in the last 30 days. Unknown values are excluded.',
+        'tip_tod'          => 'Pageviews by local server hour over the last 30 days. Hover over a bar for the exact count.',
+        'tip_device'       => 'Device distribution by visitor-day over the last 30 days.',
+        'tip_countries'    => 'Detected country by visitor-day over the last 30 days. Unknown values are excluded.',
         'warn_default_pw'  => '⚠ Default password in use — change it in pima-core.php immediately.',
     ],
     'de' => [
@@ -217,14 +272,17 @@ $strings = [
         'tagline'          => 'mehr messen. weniger verwalten.',
         'login_btn'        => 'Anmelden',
         'wrong_password'   => '✗ Falsches Passwort',
+        'auth_unavailable' => 'Der Anmeldeschutz ist vorübergehend nicht verfügbar. Prüfe die Schreibrechte von pima-cache.',
         'attempts_left'    => 'Noch %d Versuch%s bis zur Sperre.',
         'locked_out'       => 'Zu viele Fehlversuche. Bitte in %s erneut versuchen.',
         'summary'                => 'Deine Website hatte in den letzten 30 Tagen <strong>%s Seitenaufrufe</strong>.',
-        'summary_avg_per_day'     => 'Im Schnitt <strong>%s Aufrufe</strong> pro Tag.',
+        'summary_avg_full'        => 'Im Schnitt <strong>%s Aufrufe</strong> pro Kalendertag in diesem Zeitraum.',
+        'summary_avg_partial'     => 'Im Schnitt <strong>%s Aufrufe</strong> pro Kalendertag seit Aufzeichnungsbeginn (%d Kalendertag%s).',
         'total_views'      => 'Seitenaufrufe',
         'all_time'         => 'gesamt',
         'today'            => 'Heute',
         'visitors'         => 'Besucher',
+        'tip_daily_visitors' => 'Geschätzte Besucher heute. Mehrere Aufrufe mit derselben täglichen anonymen Kennung zählen einmal.',
         'win_7'            => 'Letzte 7 Tage',
         'win_30'           => 'Letzte 30 Tage',
         'vs_prev_7'        => 'vs. vorherige 7 Tage',
@@ -234,7 +292,7 @@ $strings = [
         'trend'            => '-Tage-Verlauf',
         'top_pages'        => 'Meistbesuchte Seiten',
         'win_30_label'     => 'letzte 30 Tage',
-        'change_label'     => 'Letzte 30 Tage · Änderung vs. vorherige 30 Tage',
+        'change_label'     => 'Letzte 30 Tage · absolute Änderung der Aufrufe vs. vorherige 30 Tage',
         'referrers'        => 'Quellen',
         'entry_pages'      => 'Einstiegsseiten',
         'browser_lang'     => 'Browsersprache',
@@ -248,7 +306,7 @@ $strings = [
         'ch_organic'       => 'Organische Suche',
         'ch_social'        => 'Social Media',
         'ch_referral'      => 'Verweise',
-        'tip_channels'     => 'Wie Besucher auf deine Seite kamen: direkt, über Suchmaschinen, Social Media oder andere Websites.',
+        'tip_channels'     => 'Anteil der Einstiege der letzten 30 Tage: direkt, Suche, Social Media oder andere Websites. Interne Navigation ist ausgeschlossen.',
         'recent_hits'      => 'Letzte %d Aufrufe',
         'th_date'          => 'Datum',
         'th_time'          => 'Uhrzeit',
@@ -262,9 +320,15 @@ $strings = [
         'no_pages'         => 'Noch keine Daten',
         'no_referrers'     => 'Noch keine Quellen',
         'no_external'      => 'Noch kein externer Traffic',
+        'no_channels'      => 'Noch keine klassifizierten Einstiege',
         'no_lang'          => 'Noch keine Daten',
         'no_geo'           => 'Geo deaktiviert oder keine Daten',
-        'entry_note'       => 'Erste Seiten, die Besucher von externen Quellen sehen',
+        'entry_note'       => 'Externe Einstiege der letzten 30 Tage; Neuladen kann erneut zählen',
+        'visitor_days_note'=> 'Besuchertage der letzten 30 Tage; ein Besucher kann pro Tag einmal zählen.',
+        'known_values_note'=> 'Besuchertage mit erkanntem Wert; unbekannte Werte sind ausgeschlossen.',
+        'device_desktop'   => 'Desktop',
+        'device_mobile'    => 'Mobil',
+        'device_tablet'    => 'Tablet',
         'refresh'          => 'Aktualisieren',
         'logout'           => 'Abmelden',
         'back_to_site'     => '← Zurück zur Website',
@@ -276,14 +340,14 @@ $strings = [
         'confirm_msg'      => 'Dadurch werden alle %s Einträge dauerhaft gelöscht. Bist du sicher?',
         'confirm_btn'      => 'Ja, alles löschen',
         'powered_by'       => 'Erstellt mit',
-        'tip_trend'        => 'Tägliche Seitenaufrufe der letzten %d Tage.',
+        'tip_trend'        => 'Tägliche Seitenaufrufe und geschätzte tägliche Besucher der letzten %d Tage.',
         'tip_pages'        => 'Meistbesuchte Seiten der letzten 30 Tage, mit Änderung vs. vorherige 30 Tage.',
-        'tip_referrers'    => 'Woher deine Besucher kommen — welche Websites auf deine verlinkt haben.',
-        'tip_entry'        => 'Die erste Seite, die Besucher sehen, wenn sie von einer externen Quelle wie Google kommen.',
-        'tip_lang'         => 'Die in den Browsern deiner Besucher eingestellte Sprache.',
-        'tip_tod'          => 'Wann deine Besucher am aktivsten sind. Fahre über einen Balken für Details.',
-        'tip_device'       => 'Ob Besucher ein Desktop-Gerät, Mobiltelefon oder Tablet verwenden.',
-        'tip_countries'    => 'Woher deine Besucher stammen, ermittelt über ihre IP-Adresse. Die IP selbst wird nie gespeichert.',
+        'tip_referrers'    => 'Externe Websites, die in den letzten 30 Tagen Einstiege erzeugt haben. Gezählt werden Einstiege, nicht Personen.',
+        'tip_entry'        => 'Seiten, die in den letzten 30 Tagen mit externem Referrer geöffnet wurden. Direkte Einstiege sind nicht enthalten.',
+        'tip_lang'         => 'Browsersprache nach Besuchertagen der letzten 30 Tage. Unbekannte Werte sind ausgeschlossen.',
+        'tip_tod'          => 'Seitenaufrufe nach lokaler Server-Uhrzeit in den letzten 30 Tagen. Der Balken zeigt die genaue Anzahl.',
+        'tip_device'       => 'Geräteverteilung nach Besuchertagen der letzten 30 Tage.',
+        'tip_countries'    => 'Erkanntes Herkunftsland nach Besuchertagen der letzten 30 Tage. Unbekannte Werte sind ausgeschlossen.',
         'warn_default_pw'  => '⚠ Standard-Passwort aktiv — bitte in pima-core.php sofort ändern.',
     ],
 ];
@@ -303,6 +367,13 @@ function openDb(): ?SQLite3 {
     }
 }
 
+function csvCell($value): string {
+    $value = (string) $value;
+    // Spreadsheet applications may execute formulas even after whitespace.
+    if (preg_match('/^[\x00-\x20]*[=+\-@]/', $value)) $value = "'" . $value;
+    return '"' . str_replace('"', '""', $value) . '"';
+}
+
 // ---- CSV Export ----
 if ($authed && isset($_GET['export'])) {
     $db = openDb();
@@ -312,7 +383,7 @@ if ($authed && isset($_GET['export'])) {
         echo "date,time,page,title,referrer,device,country,lang\n";
         $res = $db->query('SELECT date,time,page,title,referrer,device,country,lang FROM hits ORDER BY date DESC, time DESC');
         while ($row = $res->fetchArray(SQLITE3_NUM)) {
-            echo implode(',', array_map(fn($v) => '"' . str_replace('"', '""', (string) $v) . '"', $row)) . "\n";
+            echo implode(',', array_map('csvCell', $row)) . "\n";
         }
         $db->close();
     }
@@ -321,7 +392,8 @@ if ($authed && isset($_GET['export'])) {
 
 // ---- Clear all data (Advanced Mode only) ----
 if ($authed && $advancedMode && isset($_POST['clear_data']) && ($_POST['confirm_clear'] ?? '') === 'yes') {
-    $tokenOk = isset($_POST['csrf'], $_SESSION['csrf']) && hash_equals($_SESSION['csrf'], $_POST['csrf']);
+    $tokenOk = isset($_POST['csrf'], $_SESSION['csrf']) && is_scalar($_POST['csrf'])
+        && hash_equals($_SESSION['csrf'], (string) $_POST['csrf']);
     if ($tokenOk) {
         try {
             $db = new SQLite3(DB_PATH);
@@ -367,6 +439,14 @@ $stats = [
 if ($authed) {
     $db = openDb();
     if ($db) {
+        $hasEntryColumn = false;
+        $columns = $db->query('PRAGMA table_info(hits)');
+        while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
+            if (($column['name'] ?? '') === 'is_entry') $hasEntryColumn = true;
+        }
+        $entryWhere  = $hasEntryColumn ? 'is_entry = 1' : "referrer != ''";
+        $entryWhereH = $hasEntryColumn ? 'h.is_entry = 1' : "h.referrer != ''";
+
         $today      = date('Y-m-d');
         $trendFrom  = date('Y-m-d', strtotime('-' . (TREND_DAYS - 1) . ' days'));
 
@@ -393,9 +473,16 @@ if ($authed) {
 
         // Days the 30-day window actually covers.
         $firstDate = (string) $db->querySingle("SELECT MIN(date) FROM hits");
-        $stats['window_days'] = $firstDate
-            ? max(1, min(30, (int) floor((strtotime($today) - strtotime($firstDate)) / 86400) + 1))
-            : 1;
+        $coveredDays = 1;
+        if ($firstDate) {
+            $firstDay = DateTimeImmutable::createFromFormat('!Y-m-d', $firstDate);
+            $todayDay = DateTimeImmutable::createFromFormat('!Y-m-d', $today);
+            if ($firstDay && $todayDay) {
+                // Calendar-date difference stays correct across DST changes.
+                $coveredDays = (int) $firstDay->diff($todayDay)->format('%r%a') + 1;
+            }
+        }
+        $stats['window_days'] = max(1, min(30, $coveredDays));
 
         // Top pages — subquery takes the most recent non-empty title.
         $res = $db->query("
@@ -404,6 +491,7 @@ if ($authed) {
                    (SELECT h2.title FROM hits h2
                     WHERE h2.page = h.page
                       AND h2.title IS NOT NULL AND h2.title != ''
+                      AND h2.date >= '$win30From'
                     ORDER BY h2.id DESC LIMIT 1) AS title
             FROM hits h
             WHERE h.date >= '$win30From'
@@ -436,7 +524,7 @@ if ($authed) {
         }
 
         // Roll up to the host first, rank and cap afterwards.
-        $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE referrer != '' AND date >= '$win30From' GROUP BY referrer");
+        $res = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE $entryWhere AND referrer != '' AND date >= '$win30From' GROUP BY referrer");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $ref = preg_replace('/^www\./', '', parse_url($row['referrer'], PHP_URL_HOST) ?: $row['referrer']);
             $stats['referrers'][$ref] = ($stats['referrers'][$ref] ?? 0) + $row['c'];
@@ -453,7 +541,11 @@ if ($authed) {
             }
             return false;
         };
-        $resC = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE date >= '$win30From' GROUP BY referrer");
+        $isSearchEngine = function(string $host) use ($hostMatches, $searchEngines): bool {
+            return (bool) preg_match('/(^|\.)google\.[a-z.]+$/', $host)
+                || $hostMatches($host, $searchEngines);
+        };
+        $resC = $db->query("SELECT referrer, COUNT(*) as c FROM hits WHERE $entryWhere AND date >= '$win30From' GROUP BY referrer");
         while ($rowC = $resC->fetchArray(SQLITE3_ASSOC)) {
             $ref = strtolower($rowC['referrer'] ?? '');
             $c   = $rowC['c'];
@@ -462,21 +554,21 @@ if ($authed) {
             } else {
                 $host = parse_url($ref, PHP_URL_HOST) ?: $ref;
                 $host = preg_replace('/^www\./', '', $host);
-                if      ($hostMatches($host, $searchEngines)) $stats['channels']['organic']  += $c;
+                if      ($isSearchEngine($host))              $stats['channels']['organic']  += $c;
                 elseif  ($hostMatches($host, $socialNets))    $stats['channels']['social']   += $c;
                 else                                          $stats['channels']['referral'] += $c;
             }
         }
 
         // Devices
-        $res = $db->query("SELECT device, COUNT(*) as c FROM hits WHERE date >= '$win30From' GROUP BY device");
+        $res = $db->query("SELECT device, COUNT(DISTINCT vid) as c FROM hits WHERE vid != '' AND date >= '$win30From' GROUP BY device");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $dev = $row['device'] ?: 'desktop';
             $stats['devices'][$dev] = ($stats['devices'][$dev] ?? 0) + $row['c'];
         }
 
         // Countries
-        $res = $db->query("SELECT country, COUNT(*) as c FROM hits WHERE country != '' AND date >= '$win30From' GROUP BY country ORDER BY c DESC LIMIT 8");
+        $res = $db->query("SELECT country, COUNT(DISTINCT vid) as c FROM hits WHERE vid != '' AND country != '' AND date >= '$win30From' GROUP BY country ORDER BY c DESC LIMIT 8");
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $stats['countries'][$row['country']] = $row['c'];
         }
@@ -503,28 +595,25 @@ if ($authed) {
         }
 
         // Browser languages
-        $res = $db->query("SELECT lang, COUNT(*) as c FROM hits WHERE lang IS NOT NULL AND lang != '' AND date >= '$win30From' GROUP BY lang ORDER BY c DESC LIMIT 8");
+        $res = $db->query("SELECT lang, COUNT(DISTINCT vid) as c FROM hits WHERE vid != '' AND lang IS NOT NULL AND lang != '' AND date >= '$win30From' GROUP BY lang ORDER BY c DESC LIMIT 8");
         if ($res) {
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
                 $stats['languages'][$row['lang']] = $row['c'];
             }
         }
 
-        // Entry pages (external referrer). Strip non-hostname characters so
-        // no LIKE wildcard can reach the pattern.
-        $currentHost = preg_replace('/[^a-zA-Z0-9.\-]/', '', $_SERVER['HTTP_HOST'] ?? '');
-        // Only filter when the host is known — an empty pattern matches every row.
-        $hostClause = $currentHost !== '' ? "AND h.referrer NOT LIKE '%{$currentHost}%'" : '';
+        // Entry pages reached from an external referrer.
         $res = $db->query("
             SELECT h.page,
                    COUNT(*) AS c,
                    (SELECT h2.title FROM hits h2
                     WHERE h2.page = h.page
                       AND h2.title IS NOT NULL AND h2.title != ''
+                      AND h2.date >= '$win30From'
                     ORDER BY h2.id DESC LIMIT 1) AS title
             FROM hits h
-            WHERE h.referrer != ''
-              $hostClause
+            WHERE $entryWhereH
+              AND h.referrer != ''
               AND h.date >= '$win30From'
             GROUP BY h.page
             ORDER BY c DESC
@@ -624,10 +713,44 @@ function langName(string $code, array $map): string {
     return $map[strtolower($code)] ?? strtoupper($code);
 }
 
+function dashboardDate(int $timestamp, string $lang): string {
+    $months = $lang === 'de'
+        ? [1=>'Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember']
+        : [1=>'January','February','March','April','May','June','July','August','September','October','November','December'];
+    return date('d.', $timestamp) . ' ' . $months[(int) date('n', $timestamp)] . ' ' . date('Y', $timestamp);
+}
+
+function dashboardMonthShort(int $timestamp, string $lang): string {
+    $months = $lang === 'de'
+        ? [1=>'Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+        : [1=>'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return $months[(int) date('n', $timestamp)];
+}
+
+// Largest-remainder rounding keeps displayed category totals at exactly 100%.
+function wholePercentages(array $counts): array {
+    $total = array_sum($counts);
+    $result = array_fill_keys(array_keys($counts), 0);
+    if ($total <= 0) return $result;
+
+    $remainders = [];
+    foreach ($counts as $key => $count) {
+        $exact = max(0, (float) $count) / $total * 100;
+        $result[$key] = (int) floor($exact);
+        $remainders[$key] = $exact - $result[$key];
+    }
+    arsort($remainders);
+    $missing = 100 - array_sum($result);
+    foreach (array_keys($remainders) as $key) {
+        if ($missing-- <= 0) break;
+        $result[$key]++;
+    }
+    return $result;
+}
+
 $trendMax = 1;
 foreach ($stats['trend'] as $trendItem) $trendMax = max($trendMax, $trendItem['views']);
 $hourMax  = max(array_merge([1], array_column($stats['hours'], 'views')));
-$devTotal = array_sum($stats['devices']);
 
 $lockRemaining = '';
 if ($isLocked) {
@@ -639,7 +762,7 @@ if ($isLocked) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= htmlspecialchars($brandName) ?> · <?= htmlspecialchars($t['dashboard']) ?> · <?= date("d M Y") ?></title>
+<title><?= htmlspecialchars($brandName) ?> · <?= htmlspecialchars($t['dashboard']) ?> · <?= dashboardDate(time(), $lang) ?></title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -678,7 +801,8 @@ if ($isLocked) {
   .header-pima-name { font-size:1rem; font-weight:700; color:#fff; letter-spacing:.02em; }
   .header-tagline { font-size:.65rem; color:#aaaaaa; letter-spacing:.04em; margin-top:.1rem; }
   .header-actions { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
-  .btn-ghost { background:none; border:1px solid #555555; border-radius:8px; padding:.3rem .75rem; font-size:.78rem; color:#aaaaaa; cursor:pointer; transition:all .15s; text-decoration:none; display:inline-block; }
+  .header-actions form { display:inline; margin:0; }
+  .btn-ghost { background:none; border:1px solid #555555; border-radius:8px; padding:.3rem .75rem; font-family:inherit; font-size:.78rem; color:#aaaaaa; cursor:pointer; transition:all .15s; text-decoration:none; display:inline-block; }
   .btn-ghost:hover { border-color:#fff; color:#fff; }
   .btn-export { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:.3rem .75rem; font-size:.78rem; cursor:pointer; text-decoration:none; display:inline-block; transition:opacity .15s; }
   .btn-export:hover { opacity:.85; }
@@ -790,7 +914,7 @@ if ($isLocked) {
     border:1px solid var(--border); color:var(--muted);
     font-size:.5rem; font-weight:700; cursor:default;
     position:relative; flex-shrink:0; font-style:normal;
-    line-height:1; font-family:var(--sans); opacity:.6;
+    line-height:1; font-family:var(--sans); opacity:.6; background:none; padding:0;
   }
   .info-btn:hover, .info-btn.active { opacity:1; border-color:var(--muted); cursor:pointer; }
   .info-btn::after {
@@ -802,10 +926,11 @@ if ($isLocked) {
     padding:.4rem .6rem; border-radius:6px;
     white-space:nowrap; max-width:220px; white-space:normal;
     width:max-content; max-width:200px;
-    pointer-events:none; opacity:0; transition:opacity .15s;
+    pointer-events:none; display:none;
     z-index:10; line-height:1.4;
   }
-  @media (hover: hover) { .info-btn:hover::after { opacity:1; } }
+  @media (hover: hover) { .info-btn:hover::after { display:block; } }
+  .info-btn:focus-visible::after { display:block; }
   .tooltip-float {
     display:none; position:fixed;
     background:var(--text); color:#fff;
@@ -814,6 +939,8 @@ if ($isLocked) {
     max-width:200px; line-height:1.4;
     z-index:1000; pointer-events:none; white-space:normal;
   }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
@@ -830,7 +957,9 @@ if ($isLocked) {
     <?php if (STATS_PASSWORD === 'change-me-please'): ?>
       <div class="login-error" style="background:#f87171;color:#fff;border-color:#f87171"><?= $t['warn_default_pw'] ?></div>
     <?php endif; ?>
-    <?php if ($isLocked): ?>
+    <?php if (!empty($authUnavailable)): ?>
+      <div class="login-error"><?= htmlspecialchars($t['auth_unavailable']) ?></div>
+    <?php elseif ($isLocked): ?>
       <div class="login-locked"><?= sprintf($t['locked_out'], $lockRemaining) ?></div>
     <?php elseif (!empty($authError)): ?>
       <div class="login-error"><?= $t['wrong_password'] ?></div>
@@ -861,7 +990,10 @@ if ($isLocked) {
     <a href="/" class="btn-ghost"><?= $t['back_to_site'] ?></a>
     <a href="?export=1" class="btn-export"><?= $t['export'] ?></a>
     <a href="?" class="btn-ghost"><?= $t['refresh'] ?></a>
-    <a href="?logout=1" class="btn-ghost"><?= $t['logout'] ?></a>
+    <form method="POST">
+      <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+      <button type="submit" name="logout" value="1" class="btn-ghost"><?= $t['logout'] ?></button>
+    </form>
   </div>
 </header>
 
@@ -901,15 +1033,18 @@ if ($isLocked) {
 <?php
   $decSep = $lang === 'de' ? ',' : '.';
   $avgPerDay = number_format($stats['views_30'] / max(1, (int) $stats['window_days']), 1, $decSep, '');
+  $daySuffix = $stats['window_days'] === 1 ? '' : ($lang === 'de' ? 'e' : 's');
 ?>
 <div class="summary">
   <div class="summary-sentence">
     <?= sprintf($t['summary'], number_format($stats['views_30'])) ?>
   </div>
   <div class="summary-sentence" style="margin-top:.3rem;">
-    <?= sprintf($t['summary_avg_per_day'], $avgPerDay) ?>
+    <?= $stats['window_days'] < 30
+        ? sprintf($t['summary_avg_partial'], $avgPerDay, $stats['window_days'], $daySuffix)
+        : sprintf($t['summary_avg_full'], $avgPerDay) ?>
   </div>
-  <div class="summary-date"><?= date('d. F Y') ?> · <?= TIMEZONE ?></div>
+  <div class="summary-date"><?= dashboardDate(time(), $lang) ?> · <?= htmlspecialchars(TIMEZONE) ?></div>
 </div>
 
 <?php
@@ -928,24 +1063,33 @@ if ($isLocked) {
   <div class="kpi">
     <div class="kpi-label"><?= $t['today'] ?></div>
     <div class="kpi-value"><?= number_format($stats['today']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= number_format($stats['uniq_today']) ?> <?= $t['visitors'] ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;display:flex;align-items:center;gap:.35rem;">
+      <?= number_format($stats['uniq_today']) ?> <?= $t['visitors'] ?>
+      <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_daily_visitors']) ?>" aria-label="<?= htmlspecialchars($t['tip_daily_visitors']) ?>">i</button>
+    </div>
   </div>
   <div class="kpi">
     <div class="kpi-label"><?= $t['win_7'] ?></div>
     <div class="kpi-value"><?= number_format($stats['views_7']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;" title="<?= htmlspecialchars($t['tip_visitor_days']) ?>"><?= number_format($stats['uniq_7']) ?> <?= $t['visitor_days'] ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;display:flex;align-items:center;gap:.35rem;">
+      <?= number_format($stats['uniq_7']) ?> <?= $t['visitor_days'] ?>
+      <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_visitor_days']) ?>" aria-label="<?= htmlspecialchars($t['tip_visitor_days']) ?>">i</button>
+    </div>
     <div class="pill <?= $weekClass ?>"><?= $weekArrow ?><?= $weekDelta ?> <?= $t['vs_prev_7'] ?></div>
   </div>
   <div class="kpi">
     <div class="kpi-label"><?= $t['win_30'] ?></div>
     <div class="kpi-value"><?= number_format($stats['views_30']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;" title="<?= htmlspecialchars($t['tip_visitor_days']) ?>"><?= number_format($stats['uniq_30']) ?> <?= $t['visitor_days'] ?></div>
+    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;display:flex;align-items:center;gap:.35rem;">
+      <?= number_format($stats['uniq_30']) ?> <?= $t['visitor_days'] ?>
+      <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_visitor_days']) ?>" aria-label="<?= htmlspecialchars($t['tip_visitor_days']) ?>">i</button>
+    </div>
     <div class="pill <?= $monthClass ?>"><?= $monthArrow ?><?= $monthDelta ?> <?= $t['vs_prev_30'] ?></div>
   </div>
 </div>
 
 <div class="card">
-  <h2><span class="card-title"><?= TREND_DAYS ?><?= $t['trend'] ?> <i class="info-btn" data-tip="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>">i</i></span></h2>
+  <h2><span class="card-title"><?= TREND_DAYS ?><?= $t['trend'] ?> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>" aria-label="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>">i</button></span></h2>
   <div class="trend-chart">
     <?php foreach ($stats['trend'] as $d => $trendItem):
       $hv = $trendMax > 0 ? max(2, round($trendItem['views'] / $trendMax * 100)) : 2;
@@ -954,7 +1098,7 @@ if ($isLocked) {
       <div class="bar-views" style="height:<?= $hv ?>%"></div>
       <div class="lbl">
         <span style="display:block"><?= date('d', strtotime($d)) ?></span>
-        <span style="display:block;font-size:.45rem;color:var(--muted)"><?= date('M', strtotime($d)) ?></span>
+        <span style="display:block;font-size:.45rem;color:var(--muted)"><?= dashboardMonthShort(strtotime($d), $lang) ?></span>
       </div>
     </div>
     <?php endforeach; ?>
@@ -963,7 +1107,7 @@ if ($isLocked) {
 
 <div class="grid-2">
   <div class="card">
-    <h2><span class="card-title"><?= $t['top_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['top_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>" aria-label="<?= htmlspecialchars($t['tip_pages']) ?>">i</button></span></h2>
     <?php if (empty($stats['pages'])): ?>
       <p class="no-data"><?= $t['no_pages'] ?></p>
     <?php else:
@@ -998,7 +1142,7 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['referrers'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_referrers']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['referrers'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_referrers']) ?>" aria-label="<?= htmlspecialchars($t['tip_referrers']) ?>">i</button></span></h2>
     <?php if (empty($stats['referrers'])): ?>
       <p class="no-data"><?= $t['no_referrers'] ?></p>
     <?php else:
@@ -1019,7 +1163,7 @@ if ($isLocked) {
 
 <div class="grid-3">
   <div class="card">
-    <h2><span class="card-title"><?= $t['entry_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_entry']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['entry_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_entry']) ?>" aria-label="<?= htmlspecialchars($t['tip_entry']) ?>">i</button></span></h2>
     <?php if (empty($stats['entry_pages'])): ?>
       <p class="no-data"><?= $t['no_external'] ?></p>
     <?php else:
@@ -1049,25 +1193,28 @@ if ($isLocked) {
   </div>
 
     <div class="card">
-    <h2><span class="card-title"><?= $t['channels'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_channels']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['channels'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_channels']) ?>" aria-label="<?= htmlspecialchars($t['tip_channels']) ?>">i</button></span></h2>
     <?php
       $chTotal = array_sum($stats['channels']);
       $chLabels = ['direct' => $t['ch_direct'], 'organic' => $t['ch_organic'], 'social' => $t['ch_social'], 'referral' => $t['ch_referral']];
       arsort($stats['channels']);
+      $chPercentages = wholePercentages($stats['channels']);
     ?>
-    <?php foreach ($stats['channels'] as $chKey => $chVal):
-      $chPct = $chTotal > 0 ? round($chVal / $chTotal * 100) : 0; ?>
+    <?php if ($chTotal === 0): ?>
+      <p class="no-data"><?= htmlspecialchars($t['no_channels']) ?></p>
+    <?php else: foreach ($stats['channels'] as $chKey => $chVal):
+      $chPct = $chPercentages[$chKey]; ?>
       <div class="dev-row">
         <span class="dev-label" style="width:8rem;"><?= $chLabels[$chKey] ?></span>
         <div class="dev-track"><div class="dev-fill" style="width:<?= $chPct ?>%;opacity:<?= $chKey === 'organic' ? '1' : ($chKey === 'social' ? '.75' : ($chKey === 'referral' ? '.5' : '.35')) ?>"></div></div>
         <span class="dev-pct"><?= $chPct ?>%</span>
       </div>
-    <?php endforeach; ?>
+    <?php endforeach; endif; ?>
   
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['browser_lang'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_lang']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['browser_lang'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_lang']) ?>" aria-label="<?= htmlspecialchars($t['tip_lang']) ?>">i</button></span></h2>
     <?php if (empty($stats['languages'])): ?>
       <p class="no-data"><?= $t['no_lang'] ?></p>
     <?php else:
@@ -1082,12 +1229,13 @@ if ($isLocked) {
         </li>
       <?php endforeach; ?>
       </ul>
+      <p class="section-note"><?= htmlspecialchars($t['known_values_note']) ?></p>
     <?php endif; ?>
   </div>
 </div>
 <div class="grid-3">
   <div class="card">
-    <h2><span class="card-title"><?= $t['time_of_day'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_tod']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['time_of_day'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_tod']) ?>" aria-label="<?= htmlspecialchars($t['tip_tod']) ?>">i</button></span></h2>
     <div class="hours-chart">
       <?php for ($h = 0; $h < 24; $h++):
         $hh = $hourMax > 0 ? max(2, round($stats['hours'][$h]['views'] / $hourMax * 100)) : 2; ?>
@@ -1107,26 +1255,28 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['device_type'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_device']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['device_type'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_device']) ?>" aria-label="<?= htmlspecialchars($t['tip_device']) ?>">i</button></span></h2>
     <?php
       $deviceIcons = [
         'desktop' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
         'mobile'  => '<svg width="12" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
         'tablet'  => '<svg width="12" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
       ];
+      $devicePercentages = wholePercentages($stats['devices']);
     ?>
     <?php foreach (['desktop','mobile','tablet'] as $type):
-      $pct = $devTotal > 0 ? round($stats['devices'][$type] / $devTotal * 100) : 0; ?>
+      $pct = $devicePercentages[$type]; ?>
       <div class="dev-row">
-        <span class="dev-label" style="display:flex;align-items:center;gap:.4rem;"><?= $deviceIcons[$type] ?><?= ucfirst($type) ?></span>
+        <span class="dev-label" style="display:flex;align-items:center;gap:.4rem;"><?= $deviceIcons[$type] ?><?= htmlspecialchars($t['device_' . $type]) ?></span>
         <div class="dev-track"><div class="dev-fill <?= $type ?>" style="width:<?= $pct ?>%"></div></div>
         <span class="dev-pct"><?= $pct ?>%</span>
       </div>
     <?php endforeach; ?>
+    <p class="section-note"><?= htmlspecialchars($t['visitor_days_note']) ?></p>
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['top_countries'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <i class="info-btn" data-tip="<?= htmlspecialchars($t['tip_countries']) ?>">i</i></span></h2>
+    <h2><span class="card-title"><?= $t['top_countries'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_countries']) ?>" aria-label="<?= htmlspecialchars($t['tip_countries']) ?>">i</button></span></h2>
     <?php if (empty($stats['countries'])): ?>
       <p class="no-data"><?= $t['no_geo'] ?></p>
     <?php else:
@@ -1141,6 +1291,7 @@ if ($isLocked) {
         </li>
       <?php endforeach; ?>
       </ul>
+      <p class="section-note"><?= htmlspecialchars($t['known_values_note']) ?></p>
     <?php endif; ?>
   </div>
 </div>
@@ -1162,8 +1313,9 @@ if ($isLocked) {
             <td class="muted"><?= htmlspecialchars($r['date']) ?></td>
             <td class="muted"><?= htmlspecialchars($r['time']) ?></td>
             <td><?= htmlspecialchars($r['page']) ?></td>
-            <td class="muted"><?= !empty($r['referrer']) ? htmlspecialchars(preg_replace('/^www\./', '', parse_url($r['referrer'], PHP_URL_HOST) ?: $r['referrer'])) : '—' ?></td>
-            <td><span class="badge badge-<?= htmlspecialchars($r['device'] ?: 'desktop') ?>"><?= htmlspecialchars($r['device'] ?: 'desktop') ?></span></td>
+            <td class="muted"><?= !empty($r['referrer']) ? htmlspecialchars($r['referrer']) : '—' ?></td>
+            <?php $recentDevice = in_array($r['device'], ['desktop','mobile','tablet'], true) ? $r['device'] : 'desktop'; ?>
+            <td><span class="badge badge-<?= $recentDevice ?>"><?= htmlspecialchars($t['device_' . $recentDevice]) ?></span></td>
             <td><?= $r['country'] ? countryFlag($r['country']) . ' ' . htmlspecialchars(countryName($r['country'], $countryNames)) : '—' ?></td>
           </tr>
           <?php endforeach; ?>
