@@ -6,9 +6,9 @@
 </p>
 
 > *Pima* (Swahili) — to measure, to assess.
-> **pima Analytics** does exactly that: it measures your website traffic. No cloud. No complexity. Just your data, on your hosting.
+> **pima Analytics** does exactly that: it measures your website traffic. No analytics cloud. No complexity. Your analytics rows stay on your hosting.
 
-**Cookie-free, privacy-friendly website analytics for PHP shared hosting.**
+**Cookie-free visitor tracking and privacy-friendly website analytics for PHP shared hosting.**
 
 No Node.js. No Docker. No external database. No tracking cookies.
 Just upload four files, add a few lines to your existing `.htaccess` and `robots.txt`, paste one snippet — done.
@@ -21,7 +21,7 @@ Designed for beginners — if you can upload files via FTP and edit a text file,
 
 | | pima Analytics | Matomo | Plausible | Google Analytics |
 |---|---|---|---|---|
-| No cookies | ✅ | ⚠️ | ✅ | ❌ |
+| No tracking cookies | ✅ | ⚠️ | ✅ | ❌ |
 | No external database | ✅ | ❌ MySQL | ❌ PostgreSQL + ClickHouse | ❌ |
 | Shared hosting | ✅ | ⚠️ | ❌ requires Docker | ✅ |
 | Self-hosted | ✅ | ✅ | ✅ | ❌ |
@@ -90,7 +90,7 @@ define('TIMEZONE', 'Europe/Vienna'); // full list: php.net/timezones
 define('LANG', 'en'); // 'en' = English, 'de' = German
 ```
 
-> **Why two passwords?**
+> **Why two values?**
 > The **tracker token** appears in every tracked page's HTML source — anyone can see it. It only allows *writing* hits, not reading your dashboard. The **dashboard password** is used only by the protected server-side configuration and login.
 >
 > **Important:** Use a different value for the tracker token than any of your existing passwords — since it's visible in your source code, treat it as a public identifier, not a secret.
@@ -100,7 +100,7 @@ Using a hash is preferred for production; a plaintext value remains supported
 for simple shared-hosting installations. In either case, web access to
 `pima-core.php` must be denied.
 
-### Step 3 — Add two lines to your existing `.htaccess`
+### Step 3 — Add the pima rules to your existing `.htaccess`
 
 Your project root almost certainly already has a `.htaccess`. Open it and append this block at the end:
 
@@ -163,6 +163,9 @@ Disallow: /pima-cache/
 > Disallow: /pima-cache/
 > ```
 
+`robots.txt` only asks compliant crawlers not to index these paths. It is not
+access control; the Apache or Nginx rules in Step 3 provide the actual protection.
+
 ### Step 5 — Add the tracking snippet
 
 Replace `my-secret-word` with the value you set for `TRACKER_TOKEN` in Step 2.
@@ -182,7 +185,9 @@ fetch('/pima-tracker.php?p=' + encodeURIComponent(location.pathname)
 
 **WordPress**
 
-Open **Appearance → Theme File Editor → functions.php** and paste this at the end of the file:
+Add this to your **child theme's** `functions.php` or a small site-specific
+plugin. Do not edit a parent theme directly: a theme update can overwrite the
+change.
 
 ```php
 function pima_tracker() { ?>
@@ -211,7 +216,7 @@ Open `pima-core.php` and adapt the dashboard to match your site:
 ```php
 // --- Branding ---
 define('BRAND_COLOR', '#0d9488'); // any hex color, e.g. '#c0392b' for red
-define('BRAND_LOGO',  '');        // path or URL to your logo (see below)
+define('BRAND_LOGO',  '');        // same-origin path or URL to your logo
 define('BRAND_NAME',  'pima'); // change this to your site name
 ```
 
@@ -221,11 +226,13 @@ define('BRAND_NAME',  'pima'); // change this to your site name
 // Option A — file on your server (recommended)
 define('BRAND_LOGO', '/assets/logo.svg');
 
-// Option B — full URL
+// Option B — full URL on the same site
 define('BRAND_LOGO', 'https://yourdomain.com/assets/logo.png');
 ```
 
-Supported formats: SVG, PNG, JPG, WebP. The logo appears centered above the summary sentence. Leave empty to show `BRAND_NAME` as text instead.
+Supported formats: SVG, PNG, JPG, WebP. For security, the dashboard's Content
+Security Policy blocks images hosted on other domains. The logo appears centered
+above the summary sentence. Leave empty to show `BRAND_NAME` as text instead.
 
 ---
 
@@ -243,9 +250,10 @@ define('LANG', 'en'); // 'en' = English, 'de' = German
 
 ## Security
 
-pima Analytics is designed to be reasonably secure out of the box for a self-hosted tool on shared hosting.
+pima Analytics stays small while providing the protections expected from a
+self-hosted dashboard on shared hosting.
 
-**What's protected:**
+**What is protected after completing the installation steps:**
 - `pima-core.php` is blocked from web access via `.htaccess` — no one can read your password from the browser
 - `pima-cache/` is fully blocked — the SQLite database cannot be downloaded directly
 - The login form has **brute-force protection**: after 5 failed attempts, the form locks out for 15 minutes (configurable in `pima-core.php`)
@@ -269,8 +277,8 @@ define('LOCKOUT_SECONDS',    900);  // Lockout duration (900 = 15 minutes)
 ## Dashboard
 
 - **Summary** — Pageviews over the last 30 days and the daily average
-- **KPIs** — Total views, today, last 7 days, last 30 days (each with a delta
-  against the preceding window of the same length)
+- **KPIs** — Total views and today, plus rolling 7- and 30-day totals with an
+  absolute delta against the preceding window of the same length
 - **14-day trend** — Daily bar chart
 - **Top pages** — Ranked, with the change against the previous 30 days
 
@@ -283,7 +291,7 @@ make the deltas compare windows of different lengths.
 - **Entry pages** — Pages opened with an external referrer
 - **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
 - **Browser language** — Language distribution by visitor-day
-- **Time of day** — Pageviews by local server hour
+- **Time of day** — Pageviews by hour in the configured `TIMEZONE`
 - **Device split** — Desktop / Mobile / Tablet by visitor-day
 - **Countries** — Detected countries by visitor-day
 - **Recent hits** — Last 50 page views (collapsed by default)
@@ -315,7 +323,7 @@ All settings in `pima-core.php`:
 
 ```php
 define('STATS_PASSWORD',     'change-me');                           // Dashboard password
-define('TRACKER_TOKEN',      'my-secret-word');                      // Second password for tracking snippet
+define('TRACKER_TOKEN',      'my-secret-word');                      // Public identifier used by the tracking snippet
 define('TIMEZONE',           'Europe/Vienna');                       // php.net/timezones
 define('LANG',               'en');                                  // 'en' or 'de'
 
@@ -409,7 +417,14 @@ You can find your current IP at [whatismyip.com](https://www.whatismyip.com).
 
 ### Something looks wrong and you're not sure why
 
-Try clearing the cache: connect via FTP, open the `pima-cache/` folder, and delete everything except `.htaccess`. The database will be recreated automatically on the next page visit. You can also do this from the dashboard if `ADVANCED_MODE` is enabled.
+Check your PHP error log and verify that `pima-cache/` is writable. Before
+changing anything in that folder, download `analytics.db` as a backup.
+
+Do **not** delete `analytics.db` as a troubleshooting step: it contains all
+analytics rows. Deleting it, or using **Clear all data** in Advanced Mode,
+permanently erases the statistics. Transient `.geo_cache.json`, `.rate_*.json`
+and `.lockout_*.json` files can be removed if you specifically need to reset
+Geo caching or request/login limits; pima recreates them automatically.
 
 ---
 
@@ -427,7 +442,7 @@ Try clearing the cache: connect via FTP, open the `pima-cache/` folder, and dele
 
 - PHP 7.4+
 - Apache with `.htaccess` support, or equivalent Nginx deny rules
-- SQLite3 and PDO_SQLITE extensions enabled (standard on all major hosts)
+- SQLite3 and mbstring extensions enabled
 - `allow_url_fopen` with HTTPS support (only for country detection)
 - HTTPS (strongly recommended)
 
@@ -445,6 +460,6 @@ MIT — free to use, modify, and self-host.
 
 ## Support
 
-pima Analytics is free and open-source. If it saves you time or a cookie banner, consider buying me a coffee. ☕
+pima Analytics is free and open-source. If it saves you time, consider buying me a coffee. ☕
 
 <a href="https://ko-fi.com/ludescherstudio" target="_blank"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a>
