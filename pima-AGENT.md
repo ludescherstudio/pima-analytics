@@ -4,7 +4,7 @@ You are integrating **pima Analytics**, a cookie‑free, self‑hosted PHP analy
 
 ## What pima does
 
-pima records pageviews into a local SQLite database via a tiny tracking pixel (`pima-tracker.php`). The dashboard at `/pima` or `/analytics` shows traffic, top pages, referrers, devices, countries, languages and time‑of‑day charts. No cookies, no consent banner, no external database, no Node.js, no Docker.
+pima records pageviews into a local SQLite database via a tiny tracking pixel (`pima-tracker.php`). The dashboard at `/pima` or `/analytics` shows traffic, top pages, referrers, devices, countries, languages and time‑of‑day charts. No tracking cookies, no external database, no Node.js, no Docker.
 
 ## File structure
 
@@ -57,15 +57,15 @@ If any are missing: **stop and report.** Do not generate these files — they co
 
 Open `pima-core.php` and update the relevant `define()` calls. Do **not** rewrite the whole file — edit the specific lines:
 
-1. **`STATS_PASSWORD`** — generate a secure random password (16+ chars from `[a-zA-Z0-9]`). Avoid `'`, `\`, `$` to keep copy‑paste safe for the client. Use a cryptographic random source (e.g. `openssl rand -base64 16 | tr -d '/=+' | head -c 16`).
-2. **`TRACKER_TOKEN`** — generate a random 12‑char alphanumeric token. This value is embedded in every tracked page's HTML, so treat it as a public identifier, not a secret. It only needs to be unguessable enough that random attackers can't inject fake hits.
+1. **`STATS_PASSWORD`** — generate a secure random password (16+ chars from `[a-zA-Z0-9]`) and store a `password_hash()` result in the config. Keep the generated plaintext for the final report. For example: `php -r "echo password_hash('GENERATED_PASSWORD', PASSWORD_DEFAULT), PHP_EOL;"`.
+2. **`TRACKER_TOKEN`** — generate a random 12‑char alphanumeric token. This value is embedded in every tracked page's HTML, so treat it as a public identifier, not a secret. It rejects accidental and generic requests, but cannot prevent deliberate fake hits from someone who copied it.
 3. **`TIMEZONE`** — default `Europe/Vienna` unless the project context clearly indicates another timezone.
 4. **`LANG`** — `'de'` for German‑speaking clients (default), `'en'` if the site is clearly English‑only.
 5. **`BRAND_NAME`** — the client/project name (same name you'd use for `PESI_SITE_NAME` if pesi is also installed).
 6. **`BRAND_COLOR`** — try to match the site's primary color by scanning the main CSS file for a dominant `--primary`, `--accent`, or hex value used in headings / buttons. If unclear, leave the default `#0d9488`.
 7. **`BRAND_LOGO`** — if the site has a logo at a predictable path (e.g. `/assets/logo.svg`, `/img/logo.png`), set it. Otherwise leave empty — the dashboard falls back to `BRAND_NAME` as text.
 
-Both `STATS_PASSWORD` and `TRACKER_TOKEN` **must be reported verbatim in the final summary** so the user can save them. The password is not recoverable after install — only resettable by editing `pima-core.php`.
+The generated plaintext dashboard password and `TRACKER_TOKEN` **must be reported verbatim in the final summary** so the user can save them. The password is not recoverable from its hash after install — only resettable by editing `pima-core.php`.
 
 Do not touch `DB_PATH`, `GEO_ENABLED`, `EXCLUDED_IPS`, `BOT_PATTERNS`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_SECONDS`, `RECENT_ENTRIES`, `TREND_DAYS`, or `ADVANCED_MODE` — their defaults are correct.
 
@@ -255,13 +255,13 @@ After integration, the website's privacy policy must be updated with a section a
 
 **For German-language websites**, insert the following text (e.g. under "Analyse & Statistik"):
 
-> Diese Website verwendet eine selbst gehostete, datenschutzfreundliche Analysesoftware (pima Analytics). Es werden anonymisierte Nutzungsstatistiken erfasst (aufgerufene Seiten, Gerättyp, Browsersprache, Herkunftsland). IP-Adressen werden nicht gespeichert. Es werden keine Cookies gesetzt und keine Daten an Dritte weitergegeben. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der Websiteoptimierung).
+> Diese Website verwendet eine selbst gehostete, datenschutzfreundliche Analysesoftware (pima Analytics). Es werden pseudonymisierte Nutzungsstatistiken erfasst (aufgerufene Seiten, Gerättyp, Browsersprache und Herkunftsland). Es werden keine Tracking-Cookies gesetzt und keine IP-Adressen gespeichert. Zur Ermittlung des Herkunftslandes wird die IP-Adresse einmalig über eine verschlüsselte Verbindung an IPWhois.io übertragen und anschließend verworfen. Die gespeicherten Statistikdaten werden nach 365 Tagen gelöscht. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der Websiteoptimierung).
 
 **For English-language websites**, insert the following (e.g. under "Analytics & Statistics"):
 
-> This website uses a self-hosted, privacy-friendly analytics tool (pima Analytics). Anonymised usage statistics are collected (pages visited, device type, browser language, country of origin). IP addresses are not stored. No cookies are set and no data is shared with third parties. The legal basis is Art. 6(1)(f) GDPR (legitimate interest in website optimisation).
+> This website uses a self-hosted, privacy-friendly analytics tool (pima Analytics). Pseudonymised usage statistics are collected (pages visited, device type, browser language and country of origin). No tracking cookies are set and IP addresses are not stored. To determine the country of origin, the IP address is transmitted once over an encrypted connection to IPWhois.io and then discarded. Stored analytics data is deleted after 365 days. The legal basis is Art. 6(1)(f) GDPR (legitimate interest in website optimisation).
 
-**No cookie banner required** — since pima sets no cookies and stores no directly personal data, a consent banner is generally not necessary. When in doubt, seek legal advice.
+Whether consent or a cookie banner is required depends on the site's jurisdiction and configuration. The text above is a technical template, not legal advice.
 
 ---
 
@@ -308,7 +308,7 @@ fetch('/pima-tracker.php?p=' + encodeURIComponent(location.pathname)
 
 `pima-core.php` (changed lines only):
 ```php
-define('STATS_PASSWORD', 'Rt4vBq92LxKp7mWn');
+define('STATS_PASSWORD', '$2y$10$EPIZNOZMk1SgV9li6lSq5.MWpX04IuR1IQglNsW95RCIliYhyyJNS');
 define('TRACKER_TOKEN',  'k7m2x9p4q8vz');
 define('TIMEZONE',       'Europe/Vienna');
 define('LANG',           'de');
@@ -319,11 +319,12 @@ define('BRAND_NAME',     'Dr. Müller');
 
 Key decisions:
 - Shared `partials/footer.php` exists → **one** insertion point, not per‑page
+- The generated dashboard password is `Rt4vBq92LxKp7mWn`; only its `password_hash()` result is stored in `pima-core.php`
 - Token value in snippet matches `TRACKER_TOKEN` in config exactly
 - `BRAND_COLOR` adapted from the site's existing CSS (`#2c5282` is the dominant heading color)
 - `BRAND_LOGO` set because `/assets/logo.svg` was found in the project
 - `LANG` set to `de` for a German‑speaking client
-- `STATS_PASSWORD` and `TRACKER_TOKEN` both reported verbatim in the final summary
+- The generated plaintext dashboard password and `TRACKER_TOKEN` are both reported verbatim in the final summary
 
 Report at the end:
 
