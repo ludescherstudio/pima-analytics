@@ -61,7 +61,7 @@ Open `pima-core.php` and update the relevant `define()` calls. Do **not** rewrit
 2. **`TRACKER_TOKEN`** — generate a random 12‑char alphanumeric token. This value is embedded in every tracked page's HTML, so treat it as a public identifier, not a secret. It rejects accidental and generic requests, but cannot prevent deliberate fake hits from someone who copied it.
 3. **`TIMEZONE`** — default `Europe/Vienna` unless the project context clearly indicates another timezone.
 4. **`LANG`** — `'de'` for German‑speaking clients (default), `'en'` if the site is clearly English‑only.
-5. **`BRAND_NAME`** — the client/project name (same name you'd use for `PESI_SITE_NAME` if pesi is also installed).
+5. **`BRAND_NAME`** — the client/project name.
 6. **`BRAND_COLOR`** — try to match the site's primary color by scanning the main CSS file for a dominant `--primary`, `--accent`, or hex value used in headings / buttons. If unclear, leave the default `#0d9488`.
 7. **`BRAND_LOGO`** — if the site has a logo at a predictable path (e.g. `/assets/logo.svg`, `/img/logo.png`), set it. Otherwise leave empty — the dashboard falls back to `BRAND_NAME` as text.
 
@@ -85,7 +85,7 @@ If no footer file is found, fall back to scanning all `.php` and `.html` files f
 Exclude from any scan:
 - `pima.php`, `pima-tracker.php`, `pima-core.php`
 - Anything inside `pima-cache/`, `admin/`, `vendor/`, `node_modules/`, `.git/`
-- The `pesi-core.php` and `admin/` files if pesi CMS is present
+- Config and admin files of any other tool installed in the same root
 
 ### Step 4 — Decide placement strategy
 
@@ -215,7 +215,7 @@ Run through this checklist. Report any failures:
 - `robots.txt` contains all four pima `Disallow` lines
 - `pima-cache/` directory exists and has its `.htaccess` blocking all access
 - Repository extras removed from the web root if the full repo was uploaded — `pima-AGENT.md` and pima's `assets/` images are gone; only the four runtime files (plus the host site's own files) remain
-- Existing pesi CMS integration (if any) is untouched — pima and pesi co‑exist without conflict
+- Other tools installed in the same root are untouched — pima only adds its own files and the snippet
 
 ### Step 10 — Report
 
@@ -300,7 +300,7 @@ define('BRAND_NAME',     'pima');
 fetch('/pima-tracker.php?p=' + encodeURIComponent(location.pathname)
   + '&title=' + encodeURIComponent(document.title)
   + '&r=' + encodeURIComponent(document.referrer)
-  + '&t=k7m2x9p4q8vz');
+  + '&t=EXAMPLETOKEN');
 </script>
 </body>
 </html>
@@ -308,8 +308,8 @@ fetch('/pima-tracker.php?p=' + encodeURIComponent(location.pathname)
 
 `pima-core.php` (changed lines only):
 ```php
-define('STATS_PASSWORD', '$2y$10$EPIZNOZMk1SgV9li6lSq5.MWpX04IuR1IQglNsW95RCIliYhyyJNS');
-define('TRACKER_TOKEN',  'k7m2x9p4q8vz');
+define('STATS_PASSWORD', '$2y$10$EXAMPLE.output.of.password_hash.goes.here.....');
+define('TRACKER_TOKEN',  'EXAMPLETOKEN');
 define('TIMEZONE',       'Europe/Vienna');
 define('LANG',           'de');
 define('BRAND_COLOR',    '#2c5282');
@@ -319,7 +319,7 @@ define('BRAND_NAME',     'Dr. Müller');
 
 Key decisions:
 - Shared `partials/footer.php` exists → **one** insertion point, not per‑page
-- The generated dashboard password is `Rt4vBq92LxKp7mWn`; only its `password_hash()` result is stored in `pima-core.php`
+- The generated dashboard password (`ExamplePassword16` in this walkthrough — generate a real one) is never stored; only its `password_hash()` result goes into `pima-core.php`
 - Token value in snippet matches `TRACKER_TOKEN` in config exactly
 - `BRAND_COLOR` adapted from the site's existing CSS (`#2c5282` is the dominant heading color)
 - `BRAND_LOGO` set because `/assets/logo.svg` was found in the project
@@ -335,9 +335,9 @@ Snippet insertion:   shared-footer
 Locations touched:   1
 - partials/footer.php
 
-Dashboard URL:       https://drmueller.at/pima
-Dashboard password:  Rt4vBq92LxKp7mWn
-Tracker token:       k7m2x9p4q8vz
+Dashboard URL:       https://praxis-mueller.example/pima
+Dashboard password:  ExamplePassword16
+Tracker token:       EXAMPLETOKEN
 
 Config:
 - Timezone:    Europe/Vienna
@@ -348,7 +348,7 @@ Config:
 
 Next steps for the user:
 - Save the dashboard password in a password manager — it is not recoverable
-- Open https://drmueller.at/pima and log in
+- Open https://praxis-mueller.example/pima and log in
 - Visit any tracked page once, then refresh the dashboard to confirm hits are recorded
 - Verify pima-cache/ directory has write permissions (chmod 0750 if needed)
 - Optionally add the developer's own IP to EXCLUDED_IPS in pima-core.php to hide dev traffic
