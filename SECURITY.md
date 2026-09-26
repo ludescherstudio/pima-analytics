@@ -34,6 +34,8 @@ alongside client work — timelines are best-effort, not contractual.
 - De-anonymising a visitor from stored data. pima stores no IP addresses; the
   visitor hash is salted per day and the salt is discarded after two days.
   Geo-cache and rate-limit keys are keyed digests, never raw IPs
+- A full visitor IP leaving the server. Geo lookups send only the truncated
+  address (IPv4 /24, IPv6 /64) to IPWhois.io
 
 **Out of scope**
 

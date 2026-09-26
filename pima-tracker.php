@@ -65,12 +65,16 @@ function getCountry(string $ip, string $runtimeSecret): string {
     if (!filter_var($ip, FILTER_VALIDATE_IP)) return '';
     if ($ip === '' || in_array($ip, ['127.0.0.1', '::1'], true) || preg_match('/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/', $ip)) return 'local';
 
-    // The cache key is a keyed digest, never the raw visitor IP.
+    // Only the truncated network (IPv4 /24, IPv6 /64) is looked up and cached.
+    $lookupIp = anonymizeIp($ip);
+    if ($lookupIp === '') return '';
+
+    // The cache key is a keyed digest, never the visitor IP.
     $cacheFile = dirname(DB_PATH) . '/.geo_cache.json';
     $ttl       = 7 * 86400;
     $cache     = [];
     $cacheDirty = false;
-    $cacheKey  = $runtimeSecret !== '' ? hash_hmac('sha256', $ip, $runtimeSecret) : '';
+    $cacheKey  = $runtimeSecret !== '' ? hash_hmac('sha256', $lookupIp, $runtimeSecret) : '';
     if (file_exists($cacheFile)) {
         $cache = json_decode(@file_get_contents($cacheFile), true) ?: [];
         // Remove legacy cache entries whose keys were raw IP addresses.
@@ -87,7 +91,7 @@ function getCountry(string $ip, string $runtimeSecret): string {
     }
 
     $ctx = stream_context_create(['http' => ['timeout' => 1, 'ignore_errors' => true]]);
-    $res = @file_get_contents('https://ipwho.is/' . rawurlencode($ip) . '?fields=success,country_code', false, $ctx);
+    $res = @file_get_contents('https://ipwho.is/' . rawurlencode($lookupIp) . '?fields=success,country_code', false, $ctx);
     $country = '';
     if ($res) {
         $data    = json_decode($res, true);

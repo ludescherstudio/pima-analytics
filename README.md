@@ -310,7 +310,7 @@ make the deltas compare windows of different lengths.
 | Referrer | `google.com` | External hostname only; internal navigation is blank |
 | Entry | `1` | Distinguishes direct/external entries from internal navigation |
 | Device | `desktop` / `mobile` / `tablet` | Derived from User-Agent; the User-Agent itself is not stored |
-| Country | `AT` | Optional HTTPS IP lookup; IP itself is not stored |
+| Country | `AT` | Optional HTTPS lookup of the truncated IP; no IP is stored |
 | Language | `de` | Primary language from `Accept-Language` header |
 
 **Never stored:** raw IP address, tracking cookies, user identity or full User-Agent.
@@ -331,7 +331,7 @@ define('BRAND_COLOR',        '#0d9488');                             // Any CSS 
 define('BRAND_NAME',         'pima');                                     // Shown in header and browser tab
 define('BRAND_LOGO',         '');                                    // Path to self-hosted logo image
 define('DB_PATH',            __DIR__.'/pima-cache/analytics.db');    // SQLite database location
-define('GEO_ENABLED',        true);                                  // HTTPS country lookup via IPWhois.io
+define('GEO_ENABLED',        true);                                  // HTTPS country lookup of the truncated IP via IPWhois.io
 define('DATA_RETENTION_DAYS',365);                                   // 0 keeps rows forever
 define('EXCLUDED_IPS',       []);                                    // Your own IPs to ignore
 define('TRUST_PROXY',        false);                                 // Enable only behind a trusted CDN/proxy
@@ -351,7 +351,7 @@ define('ADVANCED_MODE',      false);                                 // Enable d
 ## Privacy & GDPR
 
 - No tracking cookies; whether consent is required still depends on your jurisdiction and implementation
-- With Geo enabled, the visitor IP is sent to IPWhois.io over HTTPS for country lookup and then discarded
+- With Geo enabled, only a truncated IP is sent to IPWhois.io over HTTPS for country lookup: IPv4 with the last octet zeroed (`203.0.113.57` → `203.0.113.0`), IPv6 cut to its first 64 bits. The full visitor IP never leaves your server
 - Geo cache and tracker rate-limit keys are keyed digests; raw IPs are **never written to disk**
 - Only the country code (e.g. `AT`) is stored, not the IP
 - Analytics rows are deleted after `DATA_RETENTION_DAYS` (365 by default)
