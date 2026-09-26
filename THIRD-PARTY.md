@@ -17,18 +17,21 @@ One, and it is optional.
 
 | Service | Endpoint | Purpose | Switch |
 |---|---|---|---|
-| IPWhois.io | `https://ipwho.is/<ip>?fields=success,country_code` | Maps a visitor IP to a two-letter country code | `GEO_ENABLED` in `pima-core.php` |
+| IPWhois.io | `https://ipwho.is/<truncated-ip>?fields=success,country_code` | Maps a truncated visitor IP to a two-letter country code | `GEO_ENABLED` in `pima-core.php` |
 
 What this means in practice:
 
 - The call happens in `pima-tracker.php`, server-side. Visitors' browsers never
   contact IPWhois.io, so no third party can set a cookie through this path.
-- The visitor's IP address **is** transmitted to IPWhois.io over HTTPS to resolve
-  it. That is the entire purpose of the call, and it is the one place where a
-  visitor IP leaves the server. pima itself never stores it.
+- A **truncated** form of the visitor's IP address is transmitted to IPWhois.io
+  over HTTPS: IPv4 with the last octet zeroed (`203.0.113.57` → `203.0.113.0`),
+  IPv6 cut to its first 64 bits. The full IP never leaves the server. IP blocks
+  are allocated and geolocated at this granularity or coarser, so country
+  accuracy is unaffected. This is the one place where any form of a visitor IP
+  leaves the server, and pima itself never stores it.
 - Results are cached for 7 days in `pima-cache/.geo_cache.json`. Cache keys are
-  HMAC digests generated with a local random secret; raw IP addresses are not
-  written to the cache.
+  HMAC digests of the truncated IP, generated with a local random secret; IP
+  addresses are not written to the cache.
 - The request has a 1-second timeout and fails silently. If IPWhois.io is slow,
   rate-limited or unreachable, the hit is still recorded — just without a country.
 - Setting `GEO_ENABLED` to `false` disables the call completely. pima then
@@ -40,7 +43,7 @@ https://ipwhois.io/terms · https://ipwhois.io/privacy
 **Note for privacy policies.** The wording suggested in `pima-AGENT.md` states
 that no data is passed to third parties only when `GEO_ENABLED` is `false`.
 If country detection is left on, the privacy policy of the tracked site should
-disclose the IP lookup and name the provider.
+disclose the lookup of the truncated IP and name the provider.
 
 ## Data pima stores
 

@@ -27,6 +27,7 @@ define('DB_PATH', __DIR__ . '/pima-cache/analytics.db');
 
 // --- IP Geolocation (optional) ---
 // Uses ipwho.is over HTTPS (free, no key needed, rate-limited)
+// Only the truncated IP is sent (IPv4 /24, IPv6 /64)
 // Set to false to disable country detection entirely
 define('GEO_ENABLED', true);
 
