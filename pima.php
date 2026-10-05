@@ -337,8 +337,8 @@ $strings = [
         'th_referrer'      => 'Referrer',
         'th_device'        => 'Device',
         'th_country'       => 'Country',
-        'show'             => 'Show ↓',
-        'hide'             => 'Hide ↑',
+        'show'             => 'Show',
+        'hide'             => 'Hide',
         'no_data'          => 'No data yet — add the tracking snippet to your site to get started.',
         'no_pages'         => 'No data yet',
         'no_referrers'     => 'No referrers yet',
@@ -353,6 +353,8 @@ $strings = [
         'device_mobile'    => 'Mobile',
         'device_tablet'    => 'Tablet',
         'refresh'          => 'Refresh',
+        'legend_views'     => 'Pageviews',
+        'legend_visitors'  => 'Visitors',
         'logout'           => 'Sign out',
         'back_to_site'     => '↗ Visit Website',
         'export'           => '↓ Export CSV',
@@ -439,8 +441,8 @@ $strings = [
         'th_referrer'      => 'Quelle',
         'th_device'        => 'Gerät',
         'th_country'       => 'Land',
-        'show'             => 'Anzeigen ↓',
-        'hide'             => 'Ausblenden ↑',
+        'show'             => 'Anzeigen',
+        'hide'             => 'Ausblenden',
         'no_data'          => 'Noch keine Daten — fügen Sie das Tracking-Snippet auf Ihrer Website ein.',
         'no_pages'         => 'Noch keine Daten',
         'no_referrers'     => 'Noch keine Quellen',
@@ -455,6 +457,8 @@ $strings = [
         'device_mobile'    => 'Mobil',
         'device_tablet'    => 'Tablet',
         'refresh'          => 'Aktualisieren',
+        'legend_views'     => 'Seitenaufrufe',
+        'legend_visitors'  => 'Besucher',
         'logout'           => 'Abmelden',
         'back_to_site'     => '↗ Zur Website',
         'export'           => '↓ CSV exportieren',
@@ -857,7 +861,10 @@ $countryNames = $lang === 'de' ? [
     'SA'=>'Saudi-Arabien','RS'=>'Serbien','SG'=>'Singapur','SK'=>'Slowakei','ZA'=>'Südafrika',
     'ES'=>'Spanien','SE'=>'Schweden','CH'=>'Schweiz','TW'=>'Taiwan','TH'=>'Thailand',
     'TR'=>'Türkei','UA'=>'Ukraine','AE'=>'Vereinigte Arabische Emirate','GB'=>'Vereinigtes Königreich','US'=>'Vereinigte Staaten',
-    'VN'=>'Vietnam','local'=>'Lokal',
+    'VN'=>'Vietnam','LI'=>'Liechtenstein','LU'=>'Luxemburg','SI'=>'Slowenien','EE'=>'Estland',
+    'LV'=>'Lettland','LT'=>'Litauen','IS'=>'Island','MT'=>'Malta','CY'=>'Zypern',
+    'BA'=>'Bosnien und Herzegowina','ME'=>'Montenegro','MK'=>'Nordmazedonien','MD'=>'Moldau','BY'=>'Belarus',
+    'GE'=>'Georgien','AD'=>'Andorra','MC'=>'Monaco','SM'=>'San Marino','XK'=>'Kosovo','local'=>'Lokal',
 ] : [
     'AF'=>'Afghanistan','AL'=>'Albania','DZ'=>'Algeria','AR'=>'Argentina','AU'=>'Australia',
     'AT'=>'Austria','BE'=>'Belgium','BR'=>'Brazil','BG'=>'Bulgaria','CA'=>'Canada',
@@ -871,7 +878,10 @@ $countryNames = $lang === 'de' ? [
     'SA'=>'Saudi Arabia','RS'=>'Serbia','SG'=>'Singapore','SK'=>'Slovakia','ZA'=>'South Africa',
     'ES'=>'Spain','SE'=>'Sweden','CH'=>'Switzerland','TW'=>'Taiwan','TH'=>'Thailand',
     'TR'=>'Turkey','UA'=>'Ukraine','AE'=>'UAE','GB'=>'United Kingdom','US'=>'United States',
-    'VN'=>'Vietnam','local'=>'Local',
+    'VN'=>'Vietnam','LI'=>'Liechtenstein','LU'=>'Luxembourg','SI'=>'Slovenia','EE'=>'Estonia',
+    'LV'=>'Latvia','LT'=>'Lithuania','IS'=>'Iceland','MT'=>'Malta','CY'=>'Cyprus',
+    'BA'=>'Bosnia and Herzegovina','ME'=>'Montenegro','MK'=>'North Macedonia','MD'=>'Moldova','BY'=>'Belarus',
+    'GE'=>'Georgia','AD'=>'Andorra','MC'=>'Monaco','SM'=>'San Marino','XK'=>'Kosovo','local'=>'Local',
 ];
 function countryName(string $code, array $map): string {
     return $map[$code] ?? $code;
@@ -923,7 +933,11 @@ function dashboardDate(int $timestamp, string $lang): string {
     $months = $lang === 'de'
         ? [1=>'Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember']
         : [1=>'January','February','March','April','May','June','July','August','September','October','November','December'];
-    return date('d.', $timestamp) . ' ' . $months[(int) date('n', $timestamp)] . ' ' . date('Y', $timestamp);
+    return date($lang === 'de' ? 'j.' : 'j', $timestamp) . ' ' . $months[(int) date('n', $timestamp)] . ' ' . date('Y', $timestamp);
+}
+
+function dashboardNumber(int $n, string $lang): string {
+    return number_format($n, 0, '', $lang === 'de' ? '.' : ',');
 }
 
 function dashboardMonthShort(int $timestamp, string $lang): string {
@@ -988,11 +1002,10 @@ if ($isLocked) {
 
   .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem; background:radial-gradient(ellipse at 30% 40%, <?= htmlspecialchars($brandColor) ?>0f, transparent 60%), var(--bg); }
   .login-box { width:100%; max-width:340px; animation:login-up .45s ease-out; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:2rem; box-shadow:0 4px 24px rgba(26,32,44,.06); }
-  .login-logo { margin-bottom:1.5rem; }
-  .login-logo img { max-height:36px; max-width:160px; }
+  .login-title { margin:0; }
   .login-box .sub { font-size:.8rem; color:var(--muted); margin:.25rem 0 2rem; text-transform:none; letter-spacing:0; }
-  .login-error { padding:.6rem .85rem; background:#f871710f; border:1px solid #f8717118; border-radius:7px; color:#f87171; font-size:.84rem; margin-bottom:1rem; }
-  .login-locked { padding:.6rem .85rem; background:#f871710f; border:1px solid #f8717118; border-radius:7px; color:#f87171; font-size:.84rem; margin-bottom:1rem; }
+  .login-error { padding:.6rem .85rem; background:#fdecea; border:1px solid #f5c6c2; border-radius:7px; color:#b42318; font-size:.84rem; margin-bottom:1rem; }
+  .login-locked { padding:.6rem .85rem; background:#fdecea; border:1px solid #f5c6c2; border-radius:7px; color:#b42318; font-size:.84rem; margin-bottom:1rem; }
   .login-box input[type=password] { width:100%; padding:.8rem 1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text); font-family:inherit; font-size:.93rem; outline:0; transition:border-color .2s, box-shadow .2s; }
   .login-box input[type=password]:focus { border-color:var(--accent); box-shadow:0 0 0 3px <?= htmlspecialchars($brandColor) ?>22; }
   .login-box input[type=password]::placeholder { color:var(--muted); }
@@ -1005,7 +1018,6 @@ if ($isLocked) {
 
   header { background:#333333; border-bottom:1px solid #444444; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
   .header-pima { display:flex; flex-direction:column; justify-content:center; }
-  .header-pima-name { font-size:1rem; font-weight:700; color:#fff; letter-spacing:.02em; }
   .header-tagline { font-size:.65rem; color:#aaaaaa; letter-spacing:.04em; margin-top:.1rem; }
   .header-actions { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
   .header-actions form { display:inline; margin:0; }
@@ -1014,7 +1026,9 @@ if ($isLocked) {
   .btn-export { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:.3rem .75rem; font-size:.78rem; cursor:pointer; text-decoration:none; display:inline-block; transition:opacity .15s; }
   .btn-export:hover { opacity:.85; }
 
-  .summary { padding:1.75rem 0 .5rem; }
+  .site-name { text-align:center; font-family:var(--font); font-size:1.15rem; font-weight:600; color:var(--text); padding:.5rem 0 0; }
+  .site-name img { max-height:80px; max-width:320px; }
+  .summary { padding:1.25rem 0 .5rem; }
   .summary-sentence { font-size:1.1rem; color:var(--text); line-height:1.6; }
   .summary-sentence strong { color:var(--accent); }
   .summary-date { font-size:.78rem; color:var(--muted); margin-top:.25rem; }
@@ -1026,11 +1040,7 @@ if ($isLocked) {
   .kpi.highlight { border-left:3px solid var(--accent); }
   .kpi-label { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:var(--accent); margin-bottom:.5rem; }
   .kpi-value { font-family:var(--font); font-size:1.9rem; font-weight:700; line-height:1; }
-  .kpi-sub { font-size:.72rem; color:var(--muted); margin-top:.3rem; }
-  .kpi-delta { font-size:.72rem; margin-top:.3rem; font-weight:500; }
-  .kpi-delta.up   { color:#2d6a4f; }
-  .kpi-delta.down { color:#c0392b; }
-  .kpi-delta.same { color:var(--muted); }
+  .kpi-sub { font-size:.82rem; color:var(--accent); margin-top:.3rem; font-weight:500; display:flex; align-items:center; gap:.35rem; }
 
   /* Delta pills */
   .pill { display:inline-flex; align-items:center; gap:.25rem; padding:.2rem .55rem; border-radius:20px; font-size:.72rem; font-weight:600; margin-top:.4rem; }
@@ -1040,26 +1050,37 @@ if ($isLocked) {
   .pill svg  { width:10px; height:10px; flex-shrink:0; }
 
   /* Rank delta pills */
-  .delta-pill { display:inline-flex; align-items:center; gap:.2rem; padding:.15rem .45rem; border-radius:20px; font-size:.65rem; font-weight:600; flex-shrink:0; }
+  .delta-pill { display:inline-flex; align-items:center; justify-content:center; min-width:3rem; gap:.2rem; padding:.15rem .45rem; border-radius:20px; font-size:.65rem; font-weight:600; flex-shrink:0; }
   .delta-pill.up   { background:#e8f5e9; color:#2d6a4f; }
   .delta-pill.down { background:#fdecea; color:#c0392b; }
   .delta-pill.same { background:var(--bg); color:var(--muted); }
 
   .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:1.5rem; margin-bottom:14px; }
   .card h2 { font-family:var(--font); font-size:.95rem; font-weight:700; margin-bottom:1rem; padding-bottom:.75rem; border-bottom:1px solid var(--border); }
+  .card-head { display:flex; align-items:center; gap:.5rem; margin-bottom:1rem; padding-bottom:.75rem; border-bottom:1px solid var(--border); }
+  .card .card-head h2 { margin:0; padding:0; border:0; }
+  .card-head h2 .card-window { margin-left:.35rem; }
   .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
   .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:14px; }
   .grid-2 > .card, .grid-3 > .card { min-width:0; }
   @media (max-width:900px) { .grid-3 { grid-template-columns:1fr 1fr; } }
   @media (max-width:640px) { .grid-2, .grid-3 { grid-template-columns:1fr; } }
 
-  .trend-chart { display:flex; align-items:flex-end; gap:3px; height:80px; }
-  .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; gap:3px; cursor:default; }
-  .bar-views { width:100%; background:var(--accent); border-radius:3px 3px 0 0; min-height:2px; opacity:.75; transition:opacity .15s; }
-  .bar-col:hover .bar-views { opacity:1; }
-  .bar-col .lbl { font-size:.52rem; color:var(--muted); text-align:center; }
+  .legend { display:flex; gap:1rem; font-size:.72rem; color:var(--muted); margin:-.25rem 0 .75rem; }
+  .legend span { display:inline-flex; align-items:center; gap:.35rem; }
+  .key { display:inline-block; width:10px; height:10px; border-radius:2px; }
+  .key-views, .bar-views { background:<?= htmlspecialchars($brandColor) ?>4d; }
+  .key-uniq, .bar-uniq { background:var(--accent); }
+  .trend-chart { display:flex; gap:3px; height:130px; }
+  .bar-col { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; cursor:default; }
+  .bar-area { flex:1; display:flex; align-items:flex-end; }
+  .bar-views { position:relative; width:100%; border-radius:3px 3px 0 0; min-height:2px; transition:background .15s; }
+  .bar-uniq { position:absolute; left:0; right:0; bottom:0; border-radius:3px 3px 0 0; }
+  .bar-col:hover .bar-views { background:<?= htmlspecialchars($brandColor) ?>80; }
+  .bar-col .lbl { font-size:.6rem; color:var(--muted); text-align:center; line-height:1.2; }
+  .bar-col .lbl small { display:block; font-size:.5rem; }
 
-  .hours-chart { display:flex; align-items:flex-end; gap:2px; height:60px; }
+  .hours-chart { display:flex; align-items:flex-end; gap:2px; height:96px; }
   .hour-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; gap:2px; }
   .hour-col .bar { width:100%; background:var(--accent); opacity:.65; border-radius:2px 2px 0 0; min-height:2px; transition:opacity .15s; }
   .hour-col:hover .bar { opacity:1; }
@@ -1077,6 +1098,7 @@ if ($isLocked) {
 
   .dev-row { display:flex; align-items:center; gap:.75rem; padding:.4rem 0; }
   .dev-label { font-size:.8rem; width:4.5rem; flex-shrink:0; }
+  .dev-label.wide { width:8rem; }
   .dev-track { flex:1; height:7px; background:var(--bg); border-radius:4px; overflow:hidden; }
   .dev-fill { height:100%; background:var(--accent); border-radius:4px; }
   .dev-fill.mobile { opacity:.7; }
@@ -1116,20 +1138,25 @@ if ($isLocked) {
   .pw-back { margin-top:1rem; font-size:.8rem; }
   .pw-back a { color:var(--accent); }
   .alert-success { background:#e8f5e9; border:1px solid #a5d6a7; color:#2d6a4f; padding:.6rem 1rem; border-radius:8px; font-size:.82rem; margin-bottom:1rem; }
+  .recent summary { cursor:pointer; list-style:none; justify-content:space-between; }
+  .recent summary::-webkit-details-marker { display:none; }
+  .recent:not([open]) summary { margin-bottom:0; padding-bottom:0; border-bottom:0; }
+  .toggle { border:1px solid var(--border); border-radius:8px; padding:.3rem .75rem; font-size:.78rem; color:var(--muted); }
+  .recent[open] .when-closed, .recent:not([open]) .when-open { display:none; }
+  @media (max-width:640px) { .rank-track { display:none; } }
+  @media (max-width:480px) { .kpi-row { grid-template-columns:1fr 1fr; } .kpi:nth-child(n+3) { grid-column:span 2; } }
   .file-info { font-size:.72rem; color:var(--muted); margin-top:.75rem; }
   .section-note { font-size:.72rem; color:var(--muted); margin-top:.5rem; }
   .empty { text-align:center; padding:2.5rem; color:var(--muted); font-size:.85rem; }
   .no-data { color:var(--muted); font-size:.82rem; padding:.5rem 0; }
 
   /* Info tooltips */
-  .card-title { display:flex; align-items:center; gap:.5rem; overflow:visible; }
-  .card h2 { overflow:visible; }
   .card-window { font-size:.72rem; font-weight:400; color:var(--muted); }
   .info-btn {
     display:inline-flex; align-items:center; justify-content:center;
-    width:12px; height:12px; border-radius:50%;
+    width:15px; height:15px; border-radius:50%;
     border:1px solid var(--border); color:var(--muted);
-    font-size:.5rem; font-weight:700; cursor:default;
+    font-size:.55rem; font-weight:700; cursor:default;
     position:relative; flex-shrink:0; font-style:normal;
     line-height:1; font-family:var(--sans); opacity:.6; background:none; padding:0;
   }
@@ -1165,11 +1192,13 @@ if ($isLocked) {
 <?php if (!$authed): ?>
 <div class="login-wrap">
   <div class="login-box">
+    <h1 class="login-title">
     <?php if ($brandLogo): ?>
       <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
     <?php else: ?>
       <img src="<?= $pimaLogoLight ?>" alt="pima Analytics" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
     <?php endif; ?>
+    </h1>
     <p class="sub"><?= htmlspecialchars($brandName) ?></p>
     <?php if ($defaultPassword): ?>
       <div class="login-error" style="background:#f87171;color:#fff;border-color:#f87171"><?= htmlspecialchars($t[$pwOverride === '' ? 'pw_err_file' : 'warn_default_pw']) ?></div>
@@ -1218,6 +1247,14 @@ if ($isLocked) {
 
 <main>
 
+<h1 class="site-name">
+  <?php if ($brandLogo): ?>
+    <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>">
+  <?php else: ?>
+    <?= htmlspecialchars($brandName) ?>
+  <?php endif; ?>
+</h1>
+
 <?php if ($pwView): ?>
 <div class="card pw-card">
   <h2><?= htmlspecialchars($t['pw_title']) ?></h2>
@@ -1259,16 +1296,6 @@ if ($isLocked) {
   $monthClass = $monthDiff > 0 ? 'up' : ($monthDiff < 0 ? 'down' : 'same');
 ?>
 
-<?php if ($brandLogo || (!empty($brandName) && $brandName !== 'pima')): ?>
-<div style="text-align:center;padding:1.5rem 0 .5rem;margin-bottom:1rem;">
-  <?php if ($brandLogo): ?>
-    <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>" style="max-height:80px;max-width:320px;">
-  <?php else: ?>
-    <span style="font-size:1.1rem;font-weight:600;color:var(--text);"><?= htmlspecialchars($brandName) ?></span>
-  <?php endif; ?>
-</div>
-<?php endif; ?>
-
 <?php
   $decSep = $lang === 'de' ? ',' : '.';
   $avgPerDay = number_format($stats['views_30'] / max(1, (int) $stats['window_days']), 1, $decSep, '');
@@ -1276,7 +1303,7 @@ if ($isLocked) {
 ?>
 <div class="summary">
   <div class="summary-sentence">
-    <?= sprintf($t['summary'], number_format($stats['views_30'])) ?>
+    <?= sprintf($t['summary'], dashboardNumber($stats['views_30'], $lang)) ?>
   </div>
   <div class="summary-sentence" style="margin-top:.3rem;">
     <?= $stats['window_days'] < 30
@@ -1296,31 +1323,31 @@ if ($isLocked) {
 <div class="kpi-row">
   <div class="kpi highlight">
     <div class="kpi-label"><?= $t['total_views'] ?></div>
-    <div class="kpi-value"><?= number_format($stats['total']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;"><?= $t['all_time'] ?></div>
+    <div class="kpi-value"><?= dashboardNumber($stats['total'], $lang) ?></div>
+    <div class="kpi-sub"><?= $t['all_time'] ?></div>
   </div>
   <div class="kpi">
     <div class="kpi-label"><?= $t['today'] ?></div>
-    <div class="kpi-value"><?= number_format($stats['today']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;display:flex;align-items:center;gap:.35rem;">
-      <?= number_format($stats['uniq_today']) ?> <?= $t['visitors'] ?>
+    <div class="kpi-value"><?= dashboardNumber($stats['today'], $lang) ?></div>
+    <div class="kpi-sub">
+      <?= dashboardNumber($stats['uniq_today'], $lang) ?> <?= $t['visitors'] ?>
       <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_daily_visitors']) ?>" aria-label="<?= htmlspecialchars($t['tip_daily_visitors']) ?>">i</button>
     </div>
   </div>
   <div class="kpi">
     <div class="kpi-label"><?= $t['win_7'] ?></div>
-    <div class="kpi-value"><?= number_format($stats['views_7']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;display:flex;align-items:center;gap:.35rem;">
-      <?= number_format($stats['uniq_7']) ?> <?= $t['visitor_days'] ?>
+    <div class="kpi-value"><?= dashboardNumber($stats['views_7'], $lang) ?></div>
+    <div class="kpi-sub">
+      <?= dashboardNumber($stats['uniq_7'], $lang) ?> <?= $t['visitor_days'] ?>
       <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_visitor_days']) ?>" aria-label="<?= htmlspecialchars($t['tip_visitor_days']) ?>">i</button>
     </div>
     <div class="pill <?= $weekClass ?>"><?= $weekArrow ?><?= $weekDelta ?> <?= $t['vs_prev_7'] ?></div>
   </div>
   <div class="kpi">
     <div class="kpi-label"><?= $t['win_30'] ?></div>
-    <div class="kpi-value"><?= number_format($stats['views_30']) ?></div>
-    <div style="font-size:.82rem;color:var(--accent);opacity:.7;margin-top:.3rem;font-weight:500;display:flex;align-items:center;gap:.35rem;">
-      <?= number_format($stats['uniq_30']) ?> <?= $t['visitor_days'] ?>
+    <div class="kpi-value"><?= dashboardNumber($stats['views_30'], $lang) ?></div>
+    <div class="kpi-sub">
+      <?= dashboardNumber($stats['uniq_30'], $lang) ?> <?= $t['visitor_days'] ?>
       <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_visitor_days']) ?>" aria-label="<?= htmlspecialchars($t['tip_visitor_days']) ?>">i</button>
     </div>
     <div class="pill <?= $monthClass ?>"><?= $monthArrow ?><?= $monthDelta ?> <?= $t['vs_prev_30'] ?></div>
@@ -1328,25 +1355,93 @@ if ($isLocked) {
 </div>
 
 <div class="card">
-  <h2><span class="card-title"><?= TREND_DAYS ?><?= $t['trend'] ?> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>" aria-label="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>">i</button></span></h2>
+  <div class="card-head"><h2><?= TREND_DAYS ?><?= $t['trend'] ?></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>" aria-label="<?= htmlspecialchars(sprintf($t['tip_trend'], TREND_DAYS)) ?>">i</button></div>
+  <div class="legend">
+    <span><i class="key key-views"></i><?= htmlspecialchars($t['legend_views']) ?></span>
+    <span><i class="key key-uniq"></i><?= htmlspecialchars($t['legend_visitors']) ?></span>
+  </div>
   <div class="trend-chart">
     <?php foreach ($stats['trend'] as $d => $trendItem):
       $hv = $trendMax > 0 ? max(2, round($trendItem['views'] / $trendMax * 100)) : 2;
+      $hu = $trendItem['views'] > 0 ? round($trendItem['uniq'] / $trendItem['views'] * 100) : 0;
     ?>
-    <div class="bar-col" title="<?= $d ?>&#10;<?= $t['views'] ?>: <?= $trendItem['views'] ?>&#10;<?= $t['visitors'] ?>: <?= $trendItem['uniq'] ?>">
-      <div class="bar-views" style="height:<?= $hv ?>%"></div>
-      <div class="lbl">
-        <span style="display:block"><?= date('d', strtotime($d)) ?></span>
-        <span style="display:block;font-size:.45rem;color:var(--muted)"><?= dashboardMonthShort(strtotime($d), $lang) ?></span>
-      </div>
+    <div class="bar-col" title="<?= dashboardDate(strtotime($d), $lang) ?>&#10;<?= htmlspecialchars($t['legend_views']) ?>: <?= $trendItem['views'] ?>&#10;<?= htmlspecialchars($t['legend_visitors']) ?>: <?= $trendItem['uniq'] ?>">
+      <div class="bar-area"><div class="bar-views" style="height:<?= $hv ?>%"><div class="bar-uniq" style="height:<?= $hu ?>%"></div></div></div>
+      <div class="lbl"><?= date('j', strtotime($d)) ?><small><?= dashboardMonthShort(strtotime($d), $lang) ?></small></div>
     </div>
     <?php endforeach; ?>
   </div>
 </div>
 
+<div class="grid-3">
+  <div class="card">
+    <div class="card-head"><h2><?= $t['channels'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_channels']) ?>" aria-label="<?= htmlspecialchars($t['tip_channels']) ?>">i</button></div>
+    <?php
+      $chTotal = array_sum($stats['channels']);
+      $chLabels = ['direct' => $t['ch_direct'], 'organic' => $t['ch_organic'], 'social' => $t['ch_social'], 'referral' => $t['ch_referral']];
+      arsort($stats['channels']);
+      $chPercentages = wholePercentages($stats['channels']);
+    ?>
+    <?php if ($chTotal === 0): ?>
+      <p class="no-data"><?= htmlspecialchars($t['no_channels']) ?></p>
+    <?php else: foreach ($stats['channels'] as $chKey => $chVal):
+      $chPct = $chPercentages[$chKey]; ?>
+      <div class="dev-row">
+        <span class="dev-label wide"><?= $chLabels[$chKey] ?></span>
+        <div class="dev-track"><div class="dev-fill" style="width:<?= $chPct ?>%;opacity:<?= $chKey === 'organic' ? '1' : ($chKey === 'social' ? '.75' : ($chKey === 'referral' ? '.5' : '.35')) ?>"></div></div>
+        <span class="dev-pct"><?= $chPct ?>%</span>
+      </div>
+    <?php endforeach; endif; ?>
+  
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2><?= $t['device_type'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_device']) ?>" aria-label="<?= htmlspecialchars($t['tip_device']) ?>">i</button></div>
+    <?php
+      $deviceIcons = [
+        'desktop' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+        'mobile'  => '<svg width="12" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
+        'tablet'  => '<svg width="12" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
+      ];
+      $devicePercentages = wholePercentages($stats['devices']);
+    ?>
+    <?php $deviceOrder = $stats['devices']; arsort($deviceOrder);
+      foreach (array_keys($deviceOrder) as $type):
+        if (!isset($deviceIcons[$type])) continue;
+      $pct = $devicePercentages[$type]; ?>
+      <div class="dev-row">
+        <span class="dev-label" style="display:flex;align-items:center;gap:.4rem;"><?= $deviceIcons[$type] ?><?= htmlspecialchars($t['device_' . $type]) ?></span>
+        <div class="dev-track"><div class="dev-fill <?= $type ?>" style="width:<?= $pct ?>%"></div></div>
+        <span class="dev-pct"><?= $pct ?>%</span>
+      </div>
+    <?php endforeach; ?>
+    <p class="section-note"><?= htmlspecialchars($t['visitor_days_note']) ?></p>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2><?= $t['time_of_day'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_tod']) ?>" aria-label="<?= htmlspecialchars($t['tip_tod']) ?>">i</button></div>
+    <div class="hours-chart">
+      <?php for ($h = 0; $h < 24; $h++):
+        $hh = $hourMax > 0 ? max(2, round($stats['hours'][$h]['views'] / $hourMax * 100)) : 2; ?>
+        <div class="hour-col" title="<?= sprintf('%02d', $h) ?>:00 — <?= $stats['hours'][$h]['views'] ?> <?= $t['views'] ?>">
+          <div class="bar" style="height:<?= $hh ?>%"></div>
+          <div class="lbl"><?= $h % 6 === 0 ? sprintf('%02d', $h) : '' ?></div>
+        </div>
+      <?php endfor; ?>
+    </div>
+    <?php
+      $peakHour = array_search(max(array_column($stats['hours'], 'views')), array_column($stats['hours'], 'views'));
+      $peakViews = $stats['hours'][$peakHour]['views'];
+    ?>
+    <?php if ($peakViews > 0): ?>
+      <p class="section-note" style="margin-top:.6rem;"><?= $t['peak'] ?>: <?= sprintf('%02d', $peakHour) ?>:00 – <?= sprintf('%02d', ($peakHour + 1) % 24) ?>:00 · <?= $peakViews ?> <?= $t['views'] ?></p>
+    <?php endif; ?>
+  </div>
+</div>
+
 <div class="grid-2">
   <div class="card">
-    <h2><span class="card-title"><?= $t['top_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>" aria-label="<?= htmlspecialchars($t['tip_pages']) ?>">i</button></span></h2>
+    <div class="card-head"><h2><?= $t['top_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_pages']) ?>" aria-label="<?= htmlspecialchars($t['tip_pages']) ?>">i</button></div>
     <?php if (empty($stats['pages'])): ?>
       <p class="no-data"><?= $t['no_pages'] ?></p>
     <?php else:
@@ -1371,7 +1466,7 @@ if ($isLocked) {
             <?php endif; ?>
           </span>
           <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxP*100) ?>%"></div></div>
-          <span class="rank-count"><?= $c ?></span>
+          <span class="rank-count"><?= dashboardNumber($c, $lang) ?></span>
           <span class="delta-pill <?= $dClass ?>"><?= $dLabel ?></span>
         </li>
       <?php endforeach; ?>
@@ -1381,28 +1476,7 @@ if ($isLocked) {
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['referrers'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_referrers']) ?>" aria-label="<?= htmlspecialchars($t['tip_referrers']) ?>">i</button></span></h2>
-    <?php if (empty($stats['referrers'])): ?>
-      <p class="no-data"><?= $t['no_referrers'] ?></p>
-    <?php else:
-      $maxR = max($stats['referrers']); $i = 1; ?>
-      <ul class="rank-list">
-      <?php foreach ($stats['referrers'] as $r => $c): ?>
-        <li>
-          <span class="rank-n"><?= $i++ ?></span>
-          <span class="rank-label" title="<?= htmlspecialchars($r) ?>"><?= htmlspecialchars($r) ?></span>
-          <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxR*100) ?>%"></div></div>
-          <span class="rank-count"><?= $c ?></span>
-        </li>
-      <?php endforeach; ?>
-      </ul>
-    <?php endif; ?>
-  </div>
-</div>
-
-<div class="grid-3">
-  <div class="card">
-    <h2><span class="card-title"><?= $t['entry_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_entry']) ?>" aria-label="<?= htmlspecialchars($t['tip_entry']) ?>">i</button></span></h2>
+    <div class="card-head"><h2><?= $t['entry_pages'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_entry']) ?>" aria-label="<?= htmlspecialchars($t['tip_entry']) ?>">i</button></div>
     <?php if (empty($stats['entry_pages'])): ?>
       <p class="no-data"><?= $t['no_external'] ?></p>
     <?php else:
@@ -1423,99 +1497,37 @@ if ($isLocked) {
             <?php endif; ?>
           </span>
           <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxE*100) ?>%"></div></div>
-          <span class="rank-count"><?= $c ?></span>
+          <span class="rank-count"><?= dashboardNumber($c, $lang) ?></span>
         </li>
       <?php endforeach; ?>
       </ul>
       <p class="section-note"><?= $t['entry_note'] ?></p>
     <?php endif; ?>
   </div>
+</div>
 
-    <div class="card">
-    <h2><span class="card-title"><?= $t['channels'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_channels']) ?>" aria-label="<?= htmlspecialchars($t['tip_channels']) ?>">i</button></span></h2>
-    <?php
-      $chTotal = array_sum($stats['channels']);
-      $chLabels = ['direct' => $t['ch_direct'], 'organic' => $t['ch_organic'], 'social' => $t['ch_social'], 'referral' => $t['ch_referral']];
-      arsort($stats['channels']);
-      $chPercentages = wholePercentages($stats['channels']);
-    ?>
-    <?php if ($chTotal === 0): ?>
-      <p class="no-data"><?= htmlspecialchars($t['no_channels']) ?></p>
-    <?php else: foreach ($stats['channels'] as $chKey => $chVal):
-      $chPct = $chPercentages[$chKey]; ?>
-      <div class="dev-row">
-        <span class="dev-label" style="width:8rem;"><?= $chLabels[$chKey] ?></span>
-        <div class="dev-track"><div class="dev-fill" style="width:<?= $chPct ?>%;opacity:<?= $chKey === 'organic' ? '1' : ($chKey === 'social' ? '.75' : ($chKey === 'referral' ? '.5' : '.35')) ?>"></div></div>
-        <span class="dev-pct"><?= $chPct ?>%</span>
-      </div>
-    <?php endforeach; endif; ?>
-  
-  </div>
-
+<div class="grid-3">
   <div class="card">
-    <h2><span class="card-title"><?= $t['browser_lang'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_lang']) ?>" aria-label="<?= htmlspecialchars($t['tip_lang']) ?>">i</button></span></h2>
-    <?php if (empty($stats['languages'])): ?>
-      <p class="no-data"><?= $t['no_lang'] ?></p>
+    <div class="card-head"><h2><?= $t['referrers'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_referrers']) ?>" aria-label="<?= htmlspecialchars($t['tip_referrers']) ?>">i</button></div>
+    <?php if (empty($stats['referrers'])): ?>
+      <p class="no-data"><?= $t['no_referrers'] ?></p>
     <?php else:
-      $maxL = max($stats['languages']); $i = 1; ?>
+      $maxR = max($stats['referrers']); $i = 1; ?>
       <ul class="rank-list">
-      <?php foreach ($stats['languages'] as $l => $c): ?>
+      <?php foreach ($stats['referrers'] as $r => $c): ?>
         <li>
           <span class="rank-n"><?= $i++ ?></span>
-          <span class="rank-label"><?= htmlspecialchars(langName($l, $langNames)) ?></span>
-          <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxL*100) ?>%"></div></div>
-          <span class="rank-count"><?= $c ?></span>
+          <span class="rank-label" title="<?= htmlspecialchars($r) ?>"><?= htmlspecialchars($r) ?></span>
+          <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxR*100) ?>%"></div></div>
+          <span class="rank-count"><?= dashboardNumber($c, $lang) ?></span>
         </li>
       <?php endforeach; ?>
       </ul>
-      <p class="section-note"><?= htmlspecialchars($t['known_values_note']) ?></p>
-    <?php endif; ?>
-  </div>
-</div>
-<div class="grid-3">
-  <div class="card">
-    <h2><span class="card-title"><?= $t['time_of_day'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_tod']) ?>" aria-label="<?= htmlspecialchars($t['tip_tod']) ?>">i</button></span></h2>
-    <div class="hours-chart">
-      <?php for ($h = 0; $h < 24; $h++):
-        $hh = $hourMax > 0 ? max(2, round($stats['hours'][$h]['views'] / $hourMax * 100)) : 2; ?>
-        <div class="hour-col" title="<?= sprintf('%02d', $h) ?>:00 — <?= $stats['hours'][$h]['views'] ?> <?= $t['views'] ?>">
-          <div class="bar" style="height:<?= $hh ?>%"></div>
-          <div class="lbl"><?= $h % 6 === 0 ? sprintf('%02d', $h) : '' ?></div>
-        </div>
-      <?php endfor; ?>
-    </div>
-    <?php
-      $peakHour = array_search(max(array_column($stats['hours'], 'views')), array_column($stats['hours'], 'views'));
-      $peakViews = $stats['hours'][$peakHour]['views'];
-    ?>
-    <?php if ($peakViews > 0): ?>
-      <p class="section-note" style="margin-top:.6rem;"><?= $t['peak'] ?>: <?= sprintf('%02d', $peakHour) ?>:00 – <?= sprintf('%02d', ($peakHour + 1) % 24) ?>:00 · <?= $peakViews ?> <?= $t['views'] ?></p>
     <?php endif; ?>
   </div>
 
   <div class="card">
-    <h2><span class="card-title"><?= $t['device_type'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_device']) ?>" aria-label="<?= htmlspecialchars($t['tip_device']) ?>">i</button></span></h2>
-    <?php
-      $deviceIcons = [
-        'desktop' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
-        'mobile'  => '<svg width="12" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
-        'tablet'  => '<svg width="12" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
-      ];
-      $devicePercentages = wholePercentages($stats['devices']);
-    ?>
-    <?php foreach (['desktop','mobile','tablet'] as $type):
-      $pct = $devicePercentages[$type]; ?>
-      <div class="dev-row">
-        <span class="dev-label" style="display:flex;align-items:center;gap:.4rem;"><?= $deviceIcons[$type] ?><?= htmlspecialchars($t['device_' . $type]) ?></span>
-        <div class="dev-track"><div class="dev-fill <?= $type ?>" style="width:<?= $pct ?>%"></div></div>
-        <span class="dev-pct"><?= $pct ?>%</span>
-      </div>
-    <?php endforeach; ?>
-    <p class="section-note"><?= htmlspecialchars($t['visitor_days_note']) ?></p>
-  </div>
-
-  <div class="card">
-    <h2><span class="card-title"><?= $t['top_countries'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_countries']) ?>" aria-label="<?= htmlspecialchars($t['tip_countries']) ?>">i</button></span></h2>
+    <div class="card-head"><h2><?= $t['top_countries'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_countries']) ?>" aria-label="<?= htmlspecialchars($t['tip_countries']) ?>">i</button></div>
     <?php if (empty($stats['countries'])): ?>
       <p class="no-data"><?= $t['no_geo'] ?></p>
     <?php else:
@@ -1526,7 +1538,27 @@ if ($isLocked) {
           <span class="rank-n"><?= $i++ ?></span>
           <span class="rank-label"><?= countryFlag($co) ?> <?= htmlspecialchars(countryName($co, $countryNames)) ?></span>
           <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxC*100) ?>%"></div></div>
-          <span class="rank-count"><?= $c ?></span>
+          <span class="rank-count"><?= dashboardNumber($c, $lang) ?></span>
+        </li>
+      <?php endforeach; ?>
+      </ul>
+      <p class="section-note"><?= htmlspecialchars($t['known_values_note']) ?></p>
+    <?php endif; ?>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2><?= $t['browser_lang'] ?> <span class="card-window"><?= $t['win_30_label'] ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_lang']) ?>" aria-label="<?= htmlspecialchars($t['tip_lang']) ?>">i</button></div>
+    <?php if (empty($stats['languages'])): ?>
+      <p class="no-data"><?= $t['no_lang'] ?></p>
+    <?php else:
+      $maxL = max($stats['languages']); $i = 1; ?>
+      <ul class="rank-list">
+      <?php foreach ($stats['languages'] as $l => $c): ?>
+        <li>
+          <span class="rank-n"><?= $i++ ?></span>
+          <span class="rank-label"><?= htmlspecialchars(langName($l, $langNames)) ?></span>
+          <div class="rank-track"><div class="rank-fill" style="width:<?= round($c/$maxL*100) ?>%"></div></div>
+          <span class="rank-count"><?= dashboardNumber($c, $lang) ?></span>
         </li>
       <?php endforeach; ?>
       </ul>
@@ -1535,13 +1567,12 @@ if ($isLocked) {
   </div>
 </div>
 
-<div class="card">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:.75rem;border-bottom:1px solid var(--border);margin-bottom:1rem;">
-    <h2 style="border:none;padding:0;margin:0;"><?= sprintf($t['recent_hits'], RECENT_ENTRIES) ?></h2>
-    <button onclick="var t=document.getElementById('recent-tbl');var b=this;t.style.display=t.style.display==='none'?'block':'none';b.textContent=t.style.display==='none'?'<?= addslashes($t['show']) ?>':'<?= addslashes($t['hide']) ?>';" style="background:none;border:1px solid var(--border);border-radius:8px;padding:.3rem .75rem;font-size:.78rem;color:var(--muted);cursor:pointer;"><?= $t['show'] ?></button>
-  </div>
-  <div id="recent-tbl" style="display:none;">
-    <div class="tbl-wrap">
+<details class="card recent">
+  <summary class="card-head">
+    <h2><?= sprintf($t['recent_hits'], RECENT_ENTRIES) ?></h2>
+    <span class="toggle"><span class="when-closed"><?= htmlspecialchars($t['show']) ?></span><span class="when-open"><?= htmlspecialchars($t['hide']) ?></span></span>
+  </summary>
+  <div class="tbl-wrap">
       <table>
         <thead>
           <tr><th><?= $t['th_date'] ?></th><th><?= $t['th_time'] ?></th><th><?= $t['th_page'] ?></th><th><?= $t['th_referrer'] ?></th><th><?= $t['th_device'] ?></th><th><?= $t['th_country'] ?></th></tr>
@@ -1560,10 +1591,9 @@ if ($isLocked) {
           <?php endforeach; ?>
         </tbody>
       </table>
-    </div>
   </div>
-  <?php if ($advancedMode): ?><p class="file-info">analytics.db · <?= $stats['db_size'] ?> KB · <?= number_format($stats['db_rows']) ?> rows</p><?php endif; ?>
-</div>
+  <?php if ($advancedMode): ?><p class="file-info">analytics.db · <?= $stats['db_size'] ?> KB · <?= dashboardNumber($stats['db_rows'], $lang) ?> rows</p><?php endif; ?>
+</details>
 
 <?php endif; // total > 0 ?>
 
@@ -1571,10 +1601,10 @@ if ($isLocked) {
 <div class="danger-zone">
   <h2><?= $t['danger_title'] ?></h2>
   <p><?= $t['danger_desc'] ?></p>
-  <div class="db-info">analytics.db · <?= $stats['db_size'] ?> KB · <?= number_format($stats['db_rows']) ?> rows</div>
+  <div class="db-info">analytics.db · <?= $stats['db_size'] ?> KB · <?= dashboardNumber($stats['db_rows'], $lang) ?> rows</div>
   <button class="btn-danger" onclick="document.getElementById('confirm-clear').classList.toggle('visible')"><?= $t['clear_btn'] ?></button>
   <div class="confirm-box" id="confirm-clear">
-    <p><?= sprintf($t['confirm_msg'], number_format($stats['db_rows'])) ?></p>
+    <p><?= sprintf($t['confirm_msg'], dashboardNumber($stats['db_rows'], $lang)) ?></p>
     <form method="POST">
       <input type="hidden" name="clear_data" value="1">
       <input type="hidden" name="confirm_clear" value="yes">

@@ -298,27 +298,39 @@ define('LOCKOUT_SECONDS',    900);  // Lockout duration (900 = 15 minutes)
 
 ## Dashboard
 
+<p align="center">
+  <img src="assets/screenshot_1.webp" width="760" alt="pima Analytics dashboard with trend, traffic channels, devices, time of day, top pages and entry pages">
+</p>
+
+From top to bottom:
+
 - **Summary** — Pageviews over the last 30 days and the daily average
 - **KPIs** — Total views and today, plus rolling 7- and 30-day totals with an
   absolute delta against the preceding window of the same length
-- **14-day trend** — Daily bar chart
-- **Top pages** — Ranked, with the change against the previous 30 days
+- **14-day trend** — Daily pageviews and estimated visitors as a bar chart
+- **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
+- **Device type** — Desktop / Mobile / Tablet by visitor-day
+- **Time of day** — Pageviews by hour in the configured `TIMEZONE`
+- **Top pages** — Ranked by page title, with the change against the previous 30 days
+- **Entry pages** — Pages opened with an external referrer
+- **Referrers** — External hosts that generated entries
+- **Countries** — Detected countries by visitor-day
+- **Browser language** — Language distribution by visitor-day
+- **Recent hits** — Last 50 page views (collapsed by default)
+- **CSV export** — Download all your data anytime
+- **Change password** — Users change their own password; see Step 2
 
 All windowed panels roll rather than following the calendar: "last 30 days"
 always means the 30 days up to and including today. A calendar month would
 drop every one of these panels to near zero at midnight on the 1st, which on a
 low-traffic site makes the first week of each month unreadable — and it would
 make the deltas compare windows of different lengths.
-- **Referrers** — External hosts that generated entries
-- **Entry pages** — Pages opened with an external referrer
-- **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
-- **Browser language** — Language distribution by visitor-day
-- **Time of day** — Pageviews by hour in the configured `TIMEZONE`
-- **Device split** — Desktop / Mobile / Tablet by visitor-day
-- **Countries** — Detected countries by visitor-day
-- **Recent hits** — Last 50 page views (collapsed by default)
-- **CSV Export** — Download all your data anytime
-- **Change password** — Users change their own password; see Step 2
+
+The dashboard works on phones as well:
+
+<p align="center">
+  <img src="assets/screenshot_2.webp" width="260" alt="pima Analytics dashboard on a phone">
+</p>
 
 ### Error codes
 
