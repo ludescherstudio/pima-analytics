@@ -305,7 +305,7 @@ define('LOCKOUT_SECONDS',    900);  // Lockout duration (900 = 15 minutes)
 From top to bottom:
 
 - **Summary** — Pageviews over the last 30 days and the daily average
-- **KPIs** — Total views and today, plus rolling 7- and 30-day totals with an
+- **KPIs** — Total pageviews and today, plus rolling 7- and 30-day totals with an
   absolute delta against the preceding window of the same length
 - **14-day trend** — Daily pageviews and estimated visitors as a bar chart
 - **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
@@ -316,7 +316,7 @@ From top to bottom:
 - **Referrers** — External hosts that generated entries
 - **Countries** — Detected countries by visitor-day
 - **Browser language** — Language distribution by visitor-day
-- **Recent hits** — Last 50 page views (collapsed by default)
+- **Latest pageviews** — The last 50 pageviews (collapsed by default)
 - **CSV export** — Download all your data anytime
 - **Change password** — Users change their own password; see Step 2
 
@@ -406,7 +406,7 @@ define('SESSION_IDLE_SECONDS',1800);                                 // Dashboar
 define('SESSION_MAX_SECONDS', 43200);                                // Sign in again after 12 hours at the latest
 define('TRACKER_RATE_LIMIT', 120);                                   // Hits per IP bucket/window
 define('TRACKER_RATE_WINDOW',60);                                    // Rate window in seconds
-define('RECENT_ENTRIES',     50);                                    // Rows in recent hits table
+define('RECENT_ENTRIES',     50);                                    // Entries in the latest-pageviews list
 define('TREND_DAYS',         14);                                    // Days shown in trend chart
 define('ADVANCED_MODE',      false);                                 // Enable danger zone in dashboard
 
