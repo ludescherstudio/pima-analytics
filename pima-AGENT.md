@@ -65,9 +65,11 @@ Open `pima-core.php` and update the relevant `define()` calls. Do **not** rewrit
 6. **`BRAND_COLOR`** — try to match the site's primary color by scanning the main CSS file for a dominant `--primary`, `--accent`, or hex value used in headings / buttons. If unclear, leave the default `#0d9488`.
 7. **`BRAND_LOGO`** — if the site has a logo at a predictable path (e.g. `/assets/logo.svg`, `/img/logo.png`), set it. Otherwise leave empty — the dashboard falls back to `BRAND_NAME` as text.
 
-The generated plaintext dashboard password and `TRACKER_TOKEN` **must be reported verbatim in the final summary** so the user can save them. The password is not recoverable from its hash after install — only resettable by editing `pima-core.php`.
+The generated plaintext dashboard password and `TRACKER_TOKEN` **must be reported verbatim in the final summary** so the user can save them. The password is not recoverable from its hash after install. The client can change it under *Change password* in the dashboard; it is then stored in `pima-cache/.pima-password`, which takes precedence over `STATS_PASSWORD`. Deleting that file resets to `pima-core.php`. The shipped `change-me-please` locks sign-in.
 
-Do not touch `DB_PATH`, `GEO_ENABLED`, `EXCLUDED_IPS`, `BOT_PATTERNS`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_SECONDS`, `RECENT_ENTRIES`, `TREND_DAYS`, or `ADVANCED_MODE` — their defaults are correct.
+Leave `STATS_PASSWORD_CHANGE` at `true` unless the integrator explicitly wants to keep sole control of the password.
+
+Do not touch `DB_PATH`, `GEO_ENABLED`, `EXCLUDED_IPS`, `BOT_PATTERNS`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_SECONDS`, `SESSION_IDLE_SECONDS`, `SESSION_MAX_SECONDS`, `RECENT_ENTRIES`, `TREND_DAYS`, or `ADVANCED_MODE` — their defaults are correct.
 
 ### Step 3 — Find the footer file
 
@@ -240,7 +242,7 @@ Config:
 - Brand logo:  <path or "default text">
 
 Next steps for the user:
-- Save the dashboard password in a password manager — it is not recoverable
+- Save the dashboard password in a password manager — it is not recoverable, but can be changed under Change password in the dashboard
 - Open https://<domain>/pima and log in
 - Visit any tracked page once, then refresh the dashboard to confirm hits are recorded
 - Verify pima-cache/ directory has write permissions (chmod 0750 if needed)
@@ -347,7 +349,7 @@ Config:
 - Brand logo:  /assets/logo.svg
 
 Next steps for the user:
-- Save the dashboard password in a password manager — it is not recoverable
+- Save the dashboard password in a password manager — it is not recoverable, but can be changed under Change password in the dashboard
 - Open https://praxis-mueller.example/pima and log in
 - Visit any tracked page once, then refresh the dashboard to confirm hits are recorded
 - Verify pima-cache/ directory has write permissions (chmod 0750 if needed)
