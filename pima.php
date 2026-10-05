@@ -1,7 +1,10 @@
 <?php
-// ============================================================
-// pima — pima.php
-// ============================================================
+/**
+ * pima Analytics — dashboard · ludescher.studio
+ * URL: example.com/pima
+ */
+
+define('PIMA_VERSION', '0.5.0');
 
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
@@ -25,6 +28,9 @@ session_set_cookie_params([
     'httponly' => true,
     'samesite' => 'Lax',
 ]);
+// Own cookie name: with the default PHPSESSID, another PHP app on the same
+// domain (pesi, a shop) would overwrite the cookie and sign the user out.
+session_name('pima_session');
 session_start();
 
 function pimaPasswordFile(): string {
@@ -232,7 +238,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password']) && !$defa
             function () use ($pw, $storedPassword): bool { return pimaPasswordVerify($pw, $storedPassword); });
         $attempts    = $check['attempts'];
         $lockedUntil = $check['locked_until'];
-        if ($check['result'] === 'unavailable' || !$check['saved']) $authUnavailable = true;
+        if ($check['result'] === 'unavailable' || !$check['saved']) {
+            $authUnavailable = true;
+            error_log('pima: login lockout file unavailable (T15)');
+        }
         if ($check['result'] === 'locked') {
             $isLocked = true;
         } elseif ($check['result'] === 'fail') {
@@ -284,11 +293,11 @@ $strings = [
     'en' => [
         'dashboard'        => 'Analytics Dashboard',
         'tagline'          => 'measure more. manage less.',
-        'login_btn'        => 'Login',
-        'wrong_password'   => '✗ Wrong password',
-        'auth_unavailable' => 'Login protection is temporarily unavailable. Check that pima-cache is writable.',
+        'login_btn'        => 'Sign in',
+        'wrong_password'   => 'That password is not correct.',
+        'auth_unavailable' => 'Signing in is not possible right now: the login lockout in pima-cache cannot be written. Check that pima-cache is writable. (Code T15)',
         'attempts_left'    => '%d attempt%s remaining before lockout.',
-        'locked_out'       => 'Too many failed attempts. Try again in %s.',
+        'locked_out'       => 'Too many failed attempts. Please try again in %s.',
         'summary'                => 'Your site had <strong>%s pageviews</strong> in the last 30 days.',
         'summary_avg_full'        => 'An average of <strong>%s views</strong> per calendar day in this period.',
         'summary_avg_partial'     => 'An average of <strong>%s views</strong> per calendar day since tracking began (%d day%s).',
@@ -344,8 +353,8 @@ $strings = [
         'device_mobile'    => 'Mobile',
         'device_tablet'    => 'Tablet',
         'refresh'          => 'Refresh',
-        'logout'           => 'Logout',
-        'back_to_site'     => '← Back to site',
+        'logout'           => 'Sign out',
+        'back_to_site'     => '↗ Visit Website',
         'export'           => '↓ Export CSV',
         'cleared'          => 'All data cleared successfully.',
         'danger_title'     => '⚠ Danger Zone',
@@ -353,7 +362,6 @@ $strings = [
         'clear_btn'        => 'Clear all data',
         'confirm_msg'      => 'This will permanently delete all %s rows. Are you sure?',
         'confirm_btn'      => 'Yes, delete everything',
-        'powered_by'       => 'Powered by',
         'tip_trend'        => 'Daily pageviews and estimated daily visitors over the last %d days.',
         'tip_pages'        => 'Most visited pages in the last 30 days, with change vs. the previous 30 days.',
         'tip_referrers'    => 'External websites that generated entries in the last 30 days. Counts are entries, not people.',
@@ -362,7 +370,9 @@ $strings = [
         'tip_tod'          => 'Pageviews by local server hour over the last 30 days. Hover over a bar for the exact count.',
         'tip_device'       => 'Device distribution by visitor-day over the last 30 days.',
         'tip_countries'    => 'Detected country by visitor-day over the last 30 days. Unknown values are excluded.',
-        'warn_default_pw'  => '⚠ Sign-in is locked: no password of your own is set. Set STATS_PASSWORD in pima-core.php.',
+        'warn_default_pw'  => 'Sign-in is disabled until a password of your own is set as STATS_PASSWORD in pima-core.php. (Code T8)',
+        'password_ph'      => 'Password',
+        'login_help'       => 'Forgot your password? Whoever looks after your website can reset it.',
         'pw_link'          => 'Change password',
         'pw_title'         => 'Change password',
         'pw_intro'         => 'The new password takes effect immediately. Other devices where you are signed in are signed out.',
@@ -374,23 +384,23 @@ $strings = [
         'pw_back'          => '← Back to dashboard',
         'pw_forgot'        => 'Forgot your password? Whoever looks after your website can reset it.',
         'pw_done'          => 'Your password has been changed. You stay signed in.',
-        'pw_err_session'   => 'Your session has expired. Please try again.',
+        'pw_err_session'   => 'The page was open for too long. Please try again.',
         'pw_err_current'   => 'The current password is not correct.',
         'pw_err_repeat'    => 'The two new passwords do not match.',
         'pw_err_short'     => 'The new password needs at least 10 characters.',
         'pw_err_same'      => 'The new password is the same as the current one.',
-        'pw_err_write'     => 'The password could not be saved; the previous one still applies. Check that pima-cache is writable.',
-        'pw_err_file'      => '⚠ Sign-in is locked because the password file pima-cache/.pima-password is damaged. Delete it via FTP; the password from pima-core.php then applies again.',
+        'pw_err_write'     => 'The password could not be saved; the previous one still applies. Check that pima-cache is writable. (Code T20)',
+        'pw_err_file'      => 'Sign-in is locked because the password file pima-cache/.pima-password is damaged. Delete it via FTP; the password from pima-core.php then applies again. (Code T20)',
     ],
     'de' => [
         'dashboard'        => 'Analyse-Dashboard',
         'tagline'          => 'mehr messen. weniger verwalten.',
         'login_btn'        => 'Anmelden',
-        'wrong_password'   => '✗ Falsches Passwort',
-        'auth_unavailable' => 'Der Anmeldeschutz ist vorübergehend nicht verfügbar. Prüfe die Schreibrechte von pima-cache.',
+        'wrong_password'   => 'Das Passwort stimmt nicht.',
+        'auth_unavailable' => 'Die Anmeldung ist gerade nicht möglich: Die Login-Sperre in pima-cache lässt sich nicht schreiben. Bitte prüfen Sie die Schreibrechte von pima-cache. (Code T15)',
         'attempts_left'    => 'Noch %d Versuch%s bis zur Sperre.',
-        'locked_out'       => 'Zu viele Fehlversuche. Bitte in %s erneut versuchen.',
-        'summary'                => 'Deine Website hatte in den letzten 30 Tagen <strong>%s Seitenaufrufe</strong>.',
+        'locked_out'       => 'Zu viele Fehlversuche. Bitte versuchen Sie es in %s erneut.',
+        'summary'                => 'Ihre Website hatte in den letzten 30 Tagen <strong>%s Seitenaufrufe</strong>.',
         'summary_avg_full'        => 'Im Schnitt <strong>%s Aufrufe</strong> pro Kalendertag in diesem Zeitraum.',
         'summary_avg_partial'     => 'Im Schnitt <strong>%s Aufrufe</strong> pro Kalendertag seit Aufzeichnungsbeginn (%d Kalendertag%s).',
         'total_views'      => 'Seitenaufrufe',
@@ -431,7 +441,7 @@ $strings = [
         'th_country'       => 'Land',
         'show'             => 'Anzeigen ↓',
         'hide'             => 'Ausblenden ↑',
-        'no_data'          => 'Noch keine Daten — füge das Tracking-Snippet auf deiner Website ein.',
+        'no_data'          => 'Noch keine Daten — fügen Sie das Tracking-Snippet auf Ihrer Website ein.',
         'no_pages'         => 'Noch keine Daten',
         'no_referrers'     => 'Noch keine Quellen',
         'no_external'      => 'Noch kein externer Traffic',
@@ -446,15 +456,14 @@ $strings = [
         'device_tablet'    => 'Tablet',
         'refresh'          => 'Aktualisieren',
         'logout'           => 'Abmelden',
-        'back_to_site'     => '← Zurück zur Website',
+        'back_to_site'     => '↗ Zur Website',
         'export'           => '↓ CSV exportieren',
         'cleared'          => 'Alle Daten wurden erfolgreich gelöscht.',
         'danger_title'     => '⚠ Gefahrenzone',
-        'danger_desc'      => 'Diese Aktionen sind unwiderruflich. Nur sichtbar weil ADVANCED_MODE in pima-core.php aktiviert ist.',
+        'danger_desc'      => 'Diese Aktionen sind unwiderruflich. Nur sichtbar, weil ADVANCED_MODE in pima-core.php aktiviert ist.',
         'clear_btn'        => 'Alle Daten löschen',
-        'confirm_msg'      => 'Dadurch werden alle %s Einträge dauerhaft gelöscht. Bist du sicher?',
+        'confirm_msg'      => 'Dadurch werden alle %s Einträge dauerhaft gelöscht. Sind Sie sicher?',
         'confirm_btn'      => 'Ja, alles löschen',
-        'powered_by'       => 'Erstellt mit',
         'tip_trend'        => 'Tägliche Seitenaufrufe und geschätzte tägliche Besucher der letzten %d Tage.',
         'tip_pages'        => 'Meistbesuchte Seiten der letzten 30 Tage, mit Änderung vs. vorherige 30 Tage.',
         'tip_referrers'    => 'Externe Websites, die in den letzten 30 Tagen Einstiege erzeugt haben. Gezählt werden Einstiege, nicht Personen.',
@@ -463,29 +472,39 @@ $strings = [
         'tip_tod'          => 'Seitenaufrufe nach lokaler Server-Uhrzeit in den letzten 30 Tagen. Der Balken zeigt die genaue Anzahl.',
         'tip_device'       => 'Geräteverteilung nach Besuchertagen der letzten 30 Tage.',
         'tip_countries'    => 'Erkanntes Herkunftsland nach Besuchertagen der letzten 30 Tage. Unbekannte Werte sind ausgeschlossen.',
-        'warn_default_pw'  => '⚠ Anmeldung gesperrt: Es ist kein eigenes Passwort gesetzt. Bitte STATS_PASSWORD in pima-core.php setzen.',
+        'warn_default_pw'  => 'Die Anmeldung ist gesperrt, bis in pima-core.php ein eigenes Passwort als STATS_PASSWORD gesetzt ist. (Code T8)',
+        'password_ph'      => 'Passwort',
+        'login_help'       => 'Passwort vergessen? Ihre Website-Betreuung kann es neu setzen.',
         'pw_link'          => 'Passwort ändern',
         'pw_title'         => 'Passwort ändern',
-        'pw_intro'         => 'Das neue Passwort gilt sofort. Andere Geräte, auf denen du angemeldet bist, werden dabei abgemeldet.',
+        'pw_intro'         => 'Das neue Passwort gilt sofort. Andere Geräte, auf denen Sie angemeldet sind, werden dabei abgemeldet.',
         'pw_current'       => 'Aktuelles Passwort',
         'pw_new'           => 'Neues Passwort',
         'pw_repeat'        => 'Neues Passwort wiederholen',
         'pw_rule'          => 'Mindestens 10 Zeichen. Ein Satz aus mehreren Wörtern ist sicher und leicht zu merken.',
         'pw_btn'           => 'Passwort ändern',
         'pw_back'          => '← Zurück zum Dashboard',
-        'pw_forgot'        => 'Passwort vergessen? Deine Website-Betreuung kann es zurücksetzen.',
-        'pw_done'          => 'Das Passwort ist geändert. Du bleibst angemeldet.',
-        'pw_err_session'   => 'Die Sitzung ist abgelaufen. Bitte versuche es erneut.',
+        'pw_forgot'        => 'Passwort vergessen? Ihre Website-Betreuung kann es zurücksetzen.',
+        'pw_done'          => 'Das Passwort ist geändert. Sie bleiben angemeldet.',
+        'pw_err_session'   => 'Die Seite war zu lange geöffnet. Bitte versuchen Sie es erneut.',
         'pw_err_current'   => 'Das aktuelle Passwort stimmt nicht.',
         'pw_err_repeat'    => 'Die beiden neuen Passwörter stimmen nicht überein.',
         'pw_err_short'     => 'Das neue Passwort braucht mindestens 10 Zeichen.',
         'pw_err_same'      => 'Das neue Passwort ist dasselbe wie das bisherige.',
-        'pw_err_write'     => 'Das Passwort ließ sich nicht speichern, es gilt weiterhin das bisherige. Prüfe die Schreibrechte von pima-cache.',
-        'pw_err_file'      => '⚠ Die Anmeldung ist gesperrt, weil die Passwortdatei pima-cache/.pima-password beschädigt ist. Lösche sie per FTP, dann gilt wieder das Passwort aus pima-core.php.',
+        'pw_err_write'     => 'Das Passwort ließ sich nicht speichern, es gilt weiterhin das bisherige. Bitte prüfen Sie die Schreibrechte von pima-cache. (Code T20)',
+        'pw_err_file'      => 'Die Anmeldung ist gesperrt, weil die Passwortdatei pima-cache/.pima-password beschädigt ist. Löschen Sie sie per FTP, dann gilt wieder das Passwort aus pima-core.php. (Code T20)',
     ],
 ];
 $lang = defined('LANG') ? LANG : 'en';
 $t = $strings[$lang] ?? $strings['en'];
+
+// pima-core.php may override single texts via $PIMA_STRINGS.
+// Unknown keys are ignored.
+if (isset($PIMA_STRINGS) && is_array($PIMA_STRINGS)) {
+    foreach ($PIMA_STRINGS as $k => $v) {
+        if (is_string($v) && array_key_exists($k, $t)) $t[$k] = $v;
+    }
+}
 
 // ---- Change password ----
 // Only signed in and only while STATS_PASSWORD_CHANGE allows it. Checking the
@@ -511,6 +530,7 @@ if ($pwChange && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pw_chang
         $check = pimaLockedCheck($lockFile, $maxAttempts, $lockoutSecs,
             function () use ($pwCurrent, $storedPassword): bool { return pimaPasswordVerify($pwCurrent, $storedPassword); });
         if ($check['result'] === 'unavailable' || ($check['result'] !== 'ok' && !$check['saved'])) {
+            error_log('pima: login lockout file unavailable (T15)');
             $pwMsg = $t['auth_unavailable'];
         } elseif ($check['result'] === 'locked') {
             $secs  = max(1, $check['locked_until'] - time());
@@ -525,6 +545,7 @@ if ($pwChange && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pw_chang
             if ($err !== '') {
                 $pwMsg = $t[$err];
             } elseif ($hash === null) {
+                error_log('pima: could not write pima-cache/.pima-password (T20)');
                 $pwMsg = $t['pw_err_write'];
             } else {
                 // This session stays signed in; all others end on their next
@@ -979,6 +1000,7 @@ if ($isLocked) {
   .login-box button { width:100%; padding:.8rem; margin-top:.75rem; background:var(--accent); color:#fff; border:0; border-radius:10px; font-family:inherit; font-size:.93rem; font-weight:600; cursor:pointer; transition:opacity .15s, transform .1s; }
   .login-box button:hover:not(:disabled) { opacity:.88; }
   .login-box button:active:not(:disabled) { transform:scale(.98); }
+  .login-help { font-size:.75rem; color:var(--muted); text-align:center; margin-top:1.25rem; line-height:1.5; }
   .attempts-hint { font-size:.72rem; color:var(--muted); margin-top:.4rem; }
 
   header { background:#333333; border-bottom:1px solid #444444; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
@@ -1150,14 +1172,14 @@ if ($isLocked) {
     <?php endif; ?>
     <p class="sub"><?= htmlspecialchars($brandName) ?></p>
     <?php if ($defaultPassword): ?>
-      <div class="login-error" style="background:#f87171;color:#fff;border-color:#f87171"><?= $t[$pwOverride === '' ? 'pw_err_file' : 'warn_default_pw'] ?></div>
+      <div class="login-error" style="background:#f87171;color:#fff;border-color:#f87171"><?= htmlspecialchars($t[$pwOverride === '' ? 'pw_err_file' : 'warn_default_pw']) ?></div>
     <?php endif; ?>
     <?php if (!empty($authUnavailable)): ?>
       <div class="login-error"><?= htmlspecialchars($t['auth_unavailable']) ?></div>
     <?php elseif ($isLocked): ?>
       <div class="login-locked"><?= sprintf($t['locked_out'], $lockRemaining) ?></div>
     <?php elseif (!empty($authError)): ?>
-      <div class="login-error"><?= $t['wrong_password'] ?></div>
+      <div class="login-error"><?= htmlspecialchars($t['wrong_password']) ?></div>
       <?php
         $rem = $maxAttempts - $attempts;
         if ($rem <= 2 && $rem > 0):
@@ -1168,9 +1190,10 @@ if ($isLocked) {
     <?php endif; ?>
     <form method="POST">
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
-      <input type="password" name="password" placeholder="<?= $lang === 'de' ? 'Passwort' : 'Password' ?>" autofocus autocomplete="current-password" <?= $isLocked || $defaultPassword ? 'disabled' : '' ?>>
+      <input type="password" name="password" placeholder="<?= htmlspecialchars($t['password_ph']) ?>" autofocus autocomplete="current-password" <?= $isLocked || $defaultPassword ? 'disabled' : '' ?>>
       <button type="submit" <?= $isLocked || $defaultPassword ? 'disabled' : '' ?>><?= $t['login_btn'] ?></button>
     </form>
+    <p class="login-help"><?= htmlspecialchars($t['login_help']) ?></p>
   </div>
 </div>
 
@@ -1182,7 +1205,7 @@ if ($isLocked) {
     <div class="header-tagline"><?= htmlspecialchars($t['tagline']) ?></div>
   </div>
   <div class="header-actions">
-    <a href="/" class="btn-ghost"><?= $t['back_to_site'] ?></a>
+    <a href="/" target="_blank" rel="noopener noreferrer" class="btn-ghost"><?= htmlspecialchars($t['back_to_site']) ?></a>
     <a href="?export=1" class="btn-export"><?= $t['export'] ?></a>
     <a href="?" class="btn-ghost"><?= $t['refresh'] ?></a>
     <?php if ($pwChange): ?><a href="?password=1" class="btn-ghost"><?= htmlspecialchars($t['pw_link']) ?></a><?php endif; ?>
@@ -1567,7 +1590,7 @@ if ($isLocked) {
 </main>
 
 <footer style="text-align:center;padding:1.5rem 1rem;font-size:.75rem;color:var(--muted);border-top:1px solid var(--border);margin-top:1rem;">
-  <?= $t['powered_by'] ?> <a href="https://ludescher.studio" target="_blank" rel="noopener noreferrer" style="color:var(--muted);text-decoration:underline;">pima Analytics</a> &mdash; <a href="https://github.com/ludescherstudio/pima-analytics" target="_blank" rel="noopener noreferrer" style="color:var(--muted);text-decoration:underline;">GitHub</a>
+  pima Analytics <?= PIMA_VERSION ?> · <a href="https://ludescher.studio" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;">ludescher.studio</a>
 </footer>
 
 <?php endif; // authed ?>

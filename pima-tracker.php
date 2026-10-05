@@ -1,9 +1,9 @@
 <?php
-// ============================================================
-// pima — tracker.php
-// Receives page view pings, filters bots, logs to SQLite.
-// No tracking cookies. No raw IP storage. Privacy-friendly.
-// ============================================================
+/**
+ * pima Analytics — tracker · ludescher.studio
+ * Receives page view pings, filters bots, logs to SQLite.
+ * No tracking cookies. No raw IP storage.
+ */
 
 header('Content-Type: image/gif');
 header('Cache-Control: no-store, no-cache, must-revalidate');

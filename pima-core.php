@@ -1,7 +1,7 @@
 <?php
-// ============================================================
-// pima — pima-core.php
-// ============================================================
+// pima Analytics — settings · ludescher.studio
+// This file is yours. Updates replace only pima.php and pima-tracker.php;
+// pima-core.php and pima-cache/ stay as they are. Documentation: README.md
 
 // --- Auth ---
 // Dashboard password (plaintext or password_hash() value). The shipped value
@@ -20,12 +20,13 @@ define('TRACKER_TOKEN', 'my-secret-word');
 define('TIMEZONE', 'Europe/Vienna'); // full list: php.net/timezones
 
 // --- Language ---
-define('LANG', 'en'); // 'en' = English, 'de' = German
+// Dashboard language: 'en' = English, 'de' = Deutsch (formal "Sie").
+define('LANG', 'en');
 
 // --- Branding ---
 define('BRAND_COLOR',    '#0d9488');          // any hex color
 define('BRAND_LOGO',     '');                // e.g. '/assets/logo.svg'
-define('BRAND_NAME',     'pima');            // change to your site name
+define('BRAND_NAME',     'My Website');      // your site name: login screen and dashboard
 
 // --- Database ---
 define('DB_PATH', __DIR__ . '/pima-cache/analytics.db');
@@ -81,6 +82,15 @@ define('SESSION_MAX_SECONDS', 43200); // sign in again after 12 hours at the lat
 // --- Tracker abuse protection ---
 define('TRACKER_RATE_LIMIT', 120); // accepted hits per IP bucket
 define('TRACKER_RATE_WINDOW', 60); // seconds
+
+// --- Own wording (optional) ---
+// Overrides single dashboard texts without touching pima.php. The full list
+// of keys is in $strings in pima.php.
+//
+// $PIMA_STRINGS = [
+//     'login_help' => 'Forgot your password? Call us: +43 123 456789',
+//     'no_data'    => 'No visits yet — they will show up here within minutes.',
+// ];
 
 // --- Advanced ---
 // Set to true to enable the Danger Zone in the dashboard (clear all data, DB info)
