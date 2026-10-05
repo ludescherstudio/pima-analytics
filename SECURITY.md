@@ -49,7 +49,7 @@ alongside client work — timelines are best-effort, not contractual.
   more. It authorises *writing* hits, never *reading* the dashboard.
   Rate limiting reduces abuse volume but cannot make a public token secret.
 - Missing `.htaccess` hardening. Denying web access to `pima-core.php` and
-  `pima-cache/` is a documented install step (see `pima-AGENT.md`, Step 6), and
+  `pima-cache/` is a documented install step (see `pima-agent.md`, Step 6), and
   on Nginx an equivalent `deny` rule is required. A server that skips it is a
   deployment issue, not a pima bug.
   **In scope, however, is a shipped rule that does not do what it claims** — if

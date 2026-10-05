@@ -40,7 +40,7 @@ What this means in practice:
 IPWhois.io's own terms and privacy policy apply to that request:
 https://ipwhois.io/terms · https://ipwhois.io/privacy
 
-**Note for privacy policies.** The wording suggested in `pima-AGENT.md` states
+**Note for privacy policies.** The wording suggested in `pima-agent.md` states
 that no data is passed to third parties only when `GEO_ENABLED` is `false`.
 If country detection is left on, the privacy policy of the tracked site should
 disclose the lookup of the truncated IP and name the provider.

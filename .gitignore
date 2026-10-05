@@ -1,4 +1,4 @@
-# --- pima runtime data (nicht hochladen) ---
+# ── pima runtime data — NEVER commit these ───────────────────
 pima-cache/*
 !pima-cache/.htaccess
 *.db
@@ -6,14 +6,14 @@ pima-cache/*
 *.sqlite3
 .geo_cache.json
 
-# --- Betriebssystem-Dateien ---
+# ── OS / sync junk ───────────────────────────────────────────
 Thumbs.db
 desktop.ini
 .DS_Store
 
-# --- ownCloud Sync-Konflikte ---
+# ownCloud sync conflicts
 *_conflict-*
 *.~lock*
 
-# --- Claude Code (lokale Werkzeug-Einstellungen) ---
+# ── Local tooling ────────────────────────────────────────────
 .claude/

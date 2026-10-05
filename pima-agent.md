@@ -17,7 +17,7 @@ webroot/
 ├── pima-core.php       # Configuration (passwords, branding, timezone)
 ├── pima-cache/
 │   └── .htaccess       # Blocks direct access to the SQLite DB
-└── pima-AGENT.md       # This file
+└── pima-agent.md       # This file
 ```
 
 pima does **not** ship its own root `.htaccess` or `robots.txt`. The target site is assumed to already have both — Steps 6 and 7 below describe exactly which lines to append to them.
@@ -60,7 +60,7 @@ Open `pima-core.php` and update the relevant `define()` calls. Do **not** rewrit
 1. **`STATS_PASSWORD`** — generate a secure random password (16+ chars from `[a-zA-Z0-9]`) and store a `password_hash()` result in the config. Keep the generated plaintext for the final report. For example: `php -r "echo password_hash('GENERATED_PASSWORD', PASSWORD_DEFAULT), PHP_EOL;"`.
 2. **`TRACKER_TOKEN`** — generate a random 12‑char alphanumeric token. This value is embedded in every tracked page's HTML, so treat it as a public identifier, not a secret. It rejects accidental and generic requests, but cannot prevent deliberate fake hits from someone who copied it.
 3. **`TIMEZONE`** — default `Europe/Vienna` unless the project context clearly indicates another timezone.
-4. **`LANG`** — `'de'` for German‑speaking clients (default), `'en'` if the site is clearly English‑only.
+4. **`LANG`** — `'en'` is the default. Set `'de'` when the site or the client is German-speaking; the German dashboard uses formal address (*Sie*).
 5. **`BRAND_NAME`** — the client/project name.
 6. **`BRAND_COLOR`** — try to match the site's primary color by scanning the main CSS file for a dominant `--primary`, `--accent`, or hex value used in headings / buttons. If unclear, leave the default `#0d9488`.
 7. **`BRAND_LOGO`** — if the site has a logo at a predictable path (e.g. `/assets/logo.svg`, `/img/logo.png`), set it. Otherwise leave empty — the dashboard falls back to `BRAND_NAME` as text.
@@ -193,7 +193,7 @@ Disallow: /pima-cache/
 
 If the user copied the **entire pima repository** into the web root (rather than just the four required files), several files that are only needed on GitHub are now sitting on the live server. Remove the pima‑specific extras so they aren't publicly accessible:
 
-- `pima-AGENT.md` — always safe to delete (this file).
+- `pima-agent.md` — always safe to delete (this file).
 - pima's own images: `assets/pima_dark_logo.svg`, `assets/pima_light_logo.svg`, `assets/screenshot_1.webp`, `assets/screenshot_2.webp`. The dashboard logos are embedded directly in `pima.php`, so these are unused at runtime. Delete the whole `assets/` folder **only if it contains nothing but these pima files** — otherwise delete just these four files and leave the rest.
 
 **Critical — never delete the host site's own files.** `README.md`, `LICENSE` and `.gitignore` are generic names that may belong to the website itself:
@@ -216,7 +216,7 @@ Run through this checklist. Report any failures:
 - `.htaccess` denies direct access to `pima-core.php`
 - `robots.txt` contains all four pima `Disallow` lines
 - `pima-cache/` directory exists and has its `.htaccess` blocking all access
-- Repository extras removed from the web root if the full repo was uploaded — `pima-AGENT.md` and pima's `assets/` images are gone; only the four runtime files (plus the host site's own files) remain
+- Repository extras removed from the web root if the full repo was uploaded — `pima-agent.md` and pima's `assets/` images are gone; only the four runtime files (plus the host site's own files) remain
 - Other tools installed in the same root are untouched — pima only adds its own files and the snippet
 
 ### Step 10 — Report
@@ -288,7 +288,7 @@ define('TIMEZONE',       'Europe/Vienna');
 define('LANG',           'en');
 define('BRAND_COLOR',    '#0d9488');
 define('BRAND_LOGO',     '');
-define('BRAND_NAME',     'pima');
+define('BRAND_NAME',     'My Website');
 ```
 
 **After:**

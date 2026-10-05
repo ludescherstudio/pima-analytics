@@ -43,9 +43,9 @@ pima-cache/
 
 No `.htaccess` in the project root, no `robots.txt`. You almost certainly already have both — the instructions below show exactly which lines to add to your existing files.
 
-The repository also includes [`pima-AGENT.md`](pima-AGENT.md) — an optional install guide for AI coding agents (see [Installation](#installation)).
+The repository also includes [`pima-agent.md`](pima-agent.md) — an optional install guide for AI coding agents (see [Installation](#installation)).
 
-> **Downloaded the whole repository?** Only `pima.php`, `pima-tracker.php`, `pima-core.php` and `pima-cache/` need to go on your server. Everything else — `README.md`, `LICENSE`, `pima-AGENT.md`, `.gitignore` and the `assets/` folder — is just for GitHub and can be deleted from your web root. The dashboard logos are embedded directly in `pima.php`, so `assets/` is not needed at runtime.
+> **Downloaded the whole repository?** Only `pima.php`, `pima-tracker.php`, `pima-core.php` and `pima-cache/` need to go on your server. Everything else — `README.md`, `LICENSE`, `pima-agent.md`, `.gitignore` and the `assets/` folder — is just for GitHub and can be deleted from your web root. The dashboard logos are embedded directly in `pima.php`, so `assets/` is not needed at runtime.
 
 ---
 
@@ -53,9 +53,9 @@ The repository also includes [`pima-AGENT.md`](pima-AGENT.md) — an optional in
 
 > **Using an AI coding agent?** If you work with an AI agent that can edit your project (Claude Code, Cursor, Copilot, …), you don't have to follow the steps manually. Copy the pima files into your project, then prompt:
 >
-> > Read `pima-AGENT.md` and install pima into this site.
+> > Read `pima-agent.md` and install pima into this site.
 >
-> The agent configures `pima-core.php`, inserts the tracking snippet into your footer, and updates your `.htaccess` and `robots.txt` for you — following the included [`pima-AGENT.md`](pima-AGENT.md) guide. Prefer to do it yourself? Just follow the manual steps below.
+> The agent configures `pima-core.php`, inserts the tracking snippet into your footer, and updates your `.htaccess` and `robots.txt` for you — following the included [`pima-agent.md`](pima-agent.md) guide. Prefer to do it yourself? Just follow the manual steps below.
 
 ### Step 1 — Upload the files
 
@@ -87,7 +87,7 @@ define('TRACKER_TOKEN', 'my-secret-word');
 define('TIMEZONE', 'Europe/Vienna'); // full list: php.net/timezones
 
 // --- Language ---
-define('LANG', 'en'); // 'en' = English, 'de' = German
+define('LANG', 'en'); // 'en' = English (default), 'de' = Deutsch
 ```
 
 > **Why two values?**
@@ -114,7 +114,7 @@ existing `.pima-password` still applies until you delete it.
 Your project root almost certainly already has a `.htaccess`. Open it and append this block at the end:
 
 ```apache
-# pima analytics
+# pima Analytics
 RewriteEngine On
 RewriteRule ^pima$       pima.php [L]
 RewriteRule ^analytics$  pima.php [L]
@@ -226,7 +226,7 @@ Open `pima-core.php` and adapt the dashboard to match your site:
 // --- Branding ---
 define('BRAND_COLOR', '#0d9488'); // any hex color, e.g. '#c0392b' for red
 define('BRAND_LOGO',  '');        // same-origin path or URL to your logo
-define('BRAND_NAME',  'pima'); // change this to your site name
+define('BRAND_NAME',  'My Website'); // change this to your site name
 ```
 
 **Adding your logo:**
@@ -247,13 +247,24 @@ above the summary sentence. Leave empty to show `BRAND_NAME` as text instead.
 
 ## Language
 
-pima Analytics ships in English and German. Set your language in `pima-core.php`:
+pima Analytics ships in English and German. English is the default; for a German dashboard change one line in `pima-core.php`:
 
 ```php
-define('LANG', 'en'); // 'en' = English, 'de' = German
+define('LANG', 'de'); // 'en' = English (default), 'de' = Deutsch
 ```
 
+Shipped German uses formal address (*Sie*), like every product of the family.
+
 **Adding your own language** takes about 5 minutes — open `pima.php`, find the `$strings` array, copy the `'en'` block, give it a new key (e.g. `'fr'`), translate the strings, and set `LANG` to `'fr'` in your config. All dashboard labels, tooltips, and messages will follow.
+
+**Rewording single strings** — tone, form of address, your own support contact — does not need a fork. Override individual keys from `pima-core.php`; unknown keys are ignored, so a typo cannot blank out a label:
+
+```php
+$PIMA_STRINGS = [
+    'login_help' => 'Forgot your password? Call us: +43 123 456789',
+    'no_data'    => 'No visits yet — they will show up here within minutes.',
+];
+```
 
 ---
 
@@ -267,7 +278,7 @@ self-hosted dashboard on shared hosting.
 - `pima-cache/` is fully blocked — the SQLite database cannot be downloaded directly
 - The login form has **brute-force protection**: after 5 failed attempts, the form locks out for 15 minutes (configurable in `pima-core.php`)
 - Concurrent login attempts share one atomic counter; expired lockouts reset cleanly
-- Dashboard sessions use strict cookie mode, regenerate after login and expire after inactivity (30 minutes), after a maximum lifetime (12 hours) or when the password changes
+- Dashboard sessions use their own cookie (`pima_session`), so other PHP apps on the same domain cannot sign users out; they use strict cookie mode, regenerate after login and expire after inactivity (30 minutes), after a maximum lifetime (12 hours) or when the password changes
 - The shipped default password and an empty password lock sign-in instead of only warning
 - Changing the password in the dashboard requires the current one, counts wrong attempts towards the same lockout as the login and signs out every other session. The new password is stored only as a `password_hash()` in `pima-cache/.pima-password` (mode 0600, blocked with the rest of `pima-cache/`)
 - All inputs to `pima-tracker.php` are safely bound using SQLite3 prepared statements to prevent SQL injection
@@ -307,6 +318,35 @@ make the deltas compare windows of different lengths.
 - **Countries** — Detected countries by visitor-day
 - **Recent hits** — Last 50 page views (collapsed by default)
 - **CSV Export** — Download all your data anytime
+- **Change password** — Users change their own password; see Step 2
+
+### Error codes
+
+`T…` means the server or the install needs attention. The codes match pesi CMS, so the same number means the same thing across the family.
+
+| Code | What happened | What to do |
+|---|---|---|
+| `T8` | No password of your own is set — `STATS_PASSWORD` is empty, missing or still the shipped default. Sign-in stays locked | Set a real `STATS_PASSWORD`, ideally a `password_hash()` value |
+| `T15` | The login lockout file in `pima-cache/` could not be opened or written. pima then refuses every sign-in, because without it the brute-force lockout would not hold. The reason is also written to the PHP error log | Give the web server write access to `pima-cache/` and check owner and permissions of the `.lockout_*.json` files |
+| `T20` | The dashboard could not save a new password, or `pima-cache/.pima-password` exists but holds no valid hash. A failed change keeps the previous password; a damaged file locks sign-in instead of silently falling back to `pima-core.php` | Check write access to `pima-cache/`. Delete a damaged `.pima-password` via FTP; `STATS_PASSWORD` then applies |
+
+---
+
+## What pima writes to disk
+
+Everything goes into `pima-cache/`, which the shipped `.htaccess` blocks completely.
+
+| File | Created | Purpose |
+|---|---|---|
+| `analytics.db` | on the first tracked pageview | The SQLite database with one row per pageview (see [What gets tracked](#what-gets-tracked)) |
+| `.salt_<date>` | once per day | Random salt for the daily visitor hash; deleted after two days |
+| `.runtime_secret` | on the first tracked pageview | Random key for the digests below |
+| `.rate_*.json` | per tracker request | Tracker rate limit per keyed IP bucket |
+| `.geo_cache.json` | with `GEO_ENABLED` | Country per keyed digest of the truncated IP, so the lookup service is asked at most once per network |
+| `.last_prune` | once per day | When rows older than `DATA_RETENTION_DAYS` were last removed |
+| `.lockout_*.json` | on the first sign-in attempt | Login lockout per IP digest: failed attempts and lock time |
+| `.pima-password` | when a user changes the password | `password_hash()` of the dashboard password; takes precedence over `STATS_PASSWORD`. Delete it to reset to `pima-core.php` |
+| `sess_*` | on every dashboard visit | PHP session files of the dashboard |
 
 ---
 
@@ -337,10 +377,10 @@ define('STATS_PASSWORD',     'change-me-please');                    // Dashboar
 define('STATS_PASSWORD_CHANGE',true);                                // Users may change it in the dashboard (pima-cache/.pima-password)
 define('TRACKER_TOKEN',      'my-secret-word');                      // Public identifier used by the tracking snippet
 define('TIMEZONE',           'Europe/Vienna');                       // php.net/timezones
-define('LANG',               'en');                                  // 'en' or 'de'
+define('LANG',               'en');                                  // 'en' (default) or 'de'
 
 define('BRAND_COLOR',        '#0d9488');                             // Any CSS hex color
-define('BRAND_NAME',         'pima');                                     // Shown in header and browser tab
+define('BRAND_NAME',         'My Website');                               // Shown on the login screen, in the dashboard and the browser tab
 define('BRAND_LOGO',         '');                                    // Path to self-hosted logo image
 define('DB_PATH',            __DIR__.'/pima-cache/analytics.db');    // SQLite database location
 define('GEO_ENABLED',        true);                                  // HTTPS country lookup of the truncated IP via IPWhois.io
@@ -357,6 +397,9 @@ define('TRACKER_RATE_WINDOW',60);                                    // Rate win
 define('RECENT_ENTRIES',     50);                                    // Rows in recent hits table
 define('TREND_DAYS',         14);                                    // Days shown in trend chart
 define('ADVANCED_MODE',      false);                                 // Enable danger zone in dashboard
+
+// Optional: override single dashboard strings — see Language
+$PIMA_STRINGS = ['no_data' => 'No visits yet.'];
 ```
 
 ---
@@ -388,6 +431,24 @@ This adds a **Danger Zone** section at the bottom of the dashboard with:
 - **Clear all data** — permanently deletes all analytics rows (requires confirmation)
 
 Disable again by setting it back to `false`.
+
+---
+
+## Updating
+
+An update replaces exactly two files: **`pima.php` and `pima-tracker.php`**. Upload both from the same release. `pima-core.php` (your settings, your `$PIMA_STRINGS`) and `pima-cache/` (your data) are never part of an update, and the tracking snippet stays as it is.
+
+Settings added in a later release take their default automatically, so an update never requires editing `pima-core.php`. The version you run is shown in the dashboard footer.
+
+### To 0.5 (from any earlier copy)
+
+0.5 is the first numbered release. When you update an existing install:
+
+- **Everyone signs in once more.** The dashboard now uses its own session cookie, so it no longer signs people out of other PHP apps on the same domain, and vice versa.
+- **The shipped password locks sign-in.** If `STATS_PASSWORD` is still `change-me-please` (or empty), set your own before uploading, otherwise the login screen shows `T8`.
+- **Users can change the password** in the dashboard. Set `STATS_PASSWORD_CHANGE` to `false` in `pima-core.php` if only you should set it.
+- **Sessions end after 12 hours** at the latest (`SESSION_MAX_SECONDS`).
+- **German now uses formal address** (*Sie*). Put any wording you prefer into `$PIMA_STRINGS`.
 
 ---
 
