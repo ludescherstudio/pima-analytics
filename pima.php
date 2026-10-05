@@ -27,16 +27,85 @@ session_set_cookie_params([
 ]);
 session_start();
 
-// Expire idle sessions and sessions created with an older dashboard password.
+function pimaPasswordFile(): string {
+    return dirname(DB_PATH) . '/.pima-password';
+}
+
+// null = no file, STATS_PASSWORD applies. '' = file present but without a
+// valid hash: sign-in stays locked instead of silently falling back.
+function pimaPasswordOverride(): ?string {
+    $f = pimaPasswordFile();
+    if (!file_exists($f)) return null;
+    $h = @file_get_contents($f);
+    $h = is_string($h) ? trim($h) : '';
+    return $h !== '' && $h[0] === '$' && password_get_info($h)['algoName'] !== 'unknown' ? $h : '';
+}
+
+// Checks a password against the stored value: password_hash() or, from
+// pima-core.php, plaintext.
+function pimaPasswordVerify(string $pw, string $stored): bool {
+    if ($stored === '') return false;
+    return strlen($stored) > 3 && $stored[0] === '$'
+        ? password_verify($pw, $stored)
+        : hash_equals($stored, $pw);
+}
+
+// Rules for a new password, checked after the current one was verified.
+// Returns '' when fine, otherwise the key of the message.
+function pimaPasswordRules(string $current, string $new, string $repeat): string {
+    if ($new !== $repeat) return 'pw_err_repeat';
+    if (preg_match_all('/./su', $new) < 10 || trim($new) === '') return 'pw_err_short';
+    if ($new === $current) return 'pw_err_same';
+    return '';
+}
+
+// Writes the hash to a temp file and swaps it in atomically.
+// Returns the new hash, or null when nothing was written.
+function pimaPasswordWrite(string $new): ?string {
+    $hash = password_hash($new, PASSWORD_DEFAULT);
+    $f = pimaPasswordFile();
+    try {
+        $tmp = $f . '-tmp-' . bin2hex(random_bytes(8));
+    } catch (Throwable $e) {
+        return null;
+    }
+    $fp = @fopen($tmp, 'x+b');
+    $ok = $fp && fwrite($fp, $hash) === strlen($hash) && fflush($fp);
+    if ($fp && function_exists('fsync')) $ok = fsync($fp) && $ok;
+    if ($fp) fclose($fp);
+    if ($ok) {
+        @chmod($tmp, 0600);
+        $ok = @rename($tmp, $f);
+    }
+    if (!$ok) { @unlink($tmp); return null; }
+    clearstatcache(true, $f);
+    return pimaPasswordOverride() === $hash ? $hash : null;
+}
+
+// ---- Dashboard password ----
+// A password changed in the dashboard is stored as password_hash() in
+// pima-cache/.pima-password and takes precedence over STATS_PASSWORD.
+// Deleting that file restores STATS_PASSWORD. An empty or shipped default
+// password locks sign-in.
+$pwChangeEnabled = defined('STATS_PASSWORD_CHANGE') ? (bool) STATS_PASSWORD_CHANGE : true;
+$pwOverride      = pimaPasswordOverride();
+$storedPassword  = $pwOverride ?? (defined('STATS_PASSWORD') ? (string) STATS_PASSWORD : '');
+$defaultPassword = in_array(trim($storedPassword), ['', 'change-me-please', 'change-me'], true);
+
+// Expire idle sessions, sessions past their maximum lifetime and sessions
+// created with an older dashboard password.
 $sessionIdle = defined('SESSION_IDLE_SECONDS') ? max(60, (int) SESSION_IDLE_SECONDS) : 1800;
-$authKey     = hash('sha256', (string) STATS_PASSWORD);
+$sessionMax  = defined('SESSION_MAX_SECONDS')  ? max(60, (int) SESSION_MAX_SECONDS)  : 43200;
+$authKey     = hash('sha256', $storedPassword);
 if (!empty($_SESSION['pima_auth'])) {
     $expired = empty($_SESSION['pima_last_activity'])
-        || (int) $_SESSION['pima_last_activity'] < time() - $sessionIdle;
-    $passwordChanged = !isset($_SESSION['pima_auth_key'])
+        || (int) $_SESSION['pima_last_activity'] < time() - $sessionIdle
+        || (int) ($_SESSION['pima_login_at'] ?? 0) < time() - $sessionMax;
+    $passwordChanged = $defaultPassword
+        || !isset($_SESSION['pima_auth_key'])
         || !hash_equals($authKey, (string) $_SESSION['pima_auth_key']);
     if ($expired || $passwordChanged) {
-        unset($_SESSION['pima_auth'], $_SESSION['pima_auth_key'], $_SESSION['pima_last_activity']);
+        unset($_SESSION['pima_auth'], $_SESSION['pima_auth_key'], $_SESSION['pima_last_activity'], $_SESSION['pima_login_at']);
     } else {
         $_SESSION['pima_last_activity'] = time();
     }
@@ -96,58 +165,86 @@ if (mt_rand(1, 50) === 1) {
     }
 }
 
+/**
+ * Runs one password check under the per-IP lockout. $check is called only
+ * while the IP is not locked, inside the exclusive lock, so parallel requests
+ * cannot share an attempt. A correct password clears the counter, a wrong one
+ * counts towards the lockout.
+ * Returns 'ok', 'fail', 'locked' or 'unavailable' (lockout file not usable);
+ * 'saved' is false when the new counter could not be written.
+ */
+function pimaLockedCheck(string $lockFile, int $maxAttempts, int $lockoutSecs, callable $check): array {
+    $state = ['result' => 'unavailable', 'saved' => false, 'attempts' => 0, 'locked_until' => 0];
+    $fh = @fopen($lockFile, 'c+');
+    if (!$fh || !@flock($fh, LOCK_EX)) {
+        if ($fh) fclose($fh);
+        return $state;
+    }
+    $decoded = json_decode((string) stream_get_contents($fh), true);
+    $attempts = is_array($decoded) ? (int) ($decoded['attempts'] ?? 0) : 0;
+    $lockedUntil = is_array($decoded) ? (int) ($decoded['locked_until'] ?? 0) : 0;
+    if ($lockedUntil > 0 && $lockedUntil <= time()) {
+        $attempts = 0;
+        $lockedUntil = 0;
+    }
+
+    if (time() < $lockedUntil) {
+        $result = 'locked';
+    } elseif ($check()) {
+        $attempts = 0;
+        $lockedUntil = 0;
+        $result = 'ok';
+    } else {
+        $attempts++;
+        if ($attempts >= $maxAttempts) $lockedUntil = time() + $lockoutSecs;
+        $result = time() < $lockedUntil ? 'locked' : 'fail';
+    }
+
+    $json = (string) json_encode(['attempts' => $attempts, 'locked_until' => $lockedUntil]);
+    rewind($fh);
+    ftruncate($fh, 0);
+    $saved = fwrite($fh, $json) === strlen($json);
+    fflush($fh);
+    flock($fh, LOCK_UN);
+    fclose($fh);
+    return ['result' => $result, 'saved' => $saved, 'attempts' => $attempts, 'locked_until' => $lockedUntil];
+}
+
+// Own path for redirects. Exactly one leading slash: '//host' and '/\host'
+// would be read as protocol-relative URLs, i.e. an open redirect.
+$selfUrl = strtok($_SERVER['REQUEST_URI'] ?? '/pima', '?');
+if (!is_string($selfUrl) || $selfUrl === '' || $selfUrl[0] !== '/'
+    || (isset($selfUrl[1]) && ($selfUrl[1] === '/' || $selfUrl[1] === '\\'))
+    || preg_match('/[\x00-\x1F\x7F]/', $selfUrl)) {
+    $selfUrl = '/pima';
+}
+
 // ---- Auth ----
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
+// With the default password the form is disabled and nothing is checked.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password']) && !$defaultPassword) {
     if (!$csrfOk) {
         // Invalid cross-site posts do not consume another person's IP quota.
         $authError = true;
         sleep(1);
     } else {
-        $fh = @fopen($lockFile, 'c+');
-        if (!$fh || !@flock($fh, LOCK_EX)) {
-            if ($fh) fclose($fh);
-            $authUnavailable = true;
-        } else {
-            $decoded = json_decode((string) stream_get_contents($fh), true);
-            $attempts = is_array($decoded) ? (int) ($decoded['attempts'] ?? 0) : 0;
-            $lockedUntil = is_array($decoded) ? (int) ($decoded['locked_until'] ?? 0) : 0;
-            if ($lockedUntil > 0 && $lockedUntil <= time()) {
-                $attempts = 0;
-                $lockedUntil = 0;
-            }
-
-            if (time() < $lockedUntil) {
-                $isLocked = true;
-            } else {
-                $pw     = is_scalar($_POST['password']) ? (string) $_POST['password'] : '';
-                $stored = (string) STATS_PASSWORD;
-                $pwOk   = (strlen($stored) > 3 && $stored[0] === '$')
-                    ? password_verify($pw, $stored)
-                    : hash_equals($stored, $pw);
-                if ($pwOk) {
-                    $attempts = 0;
-                    $lockedUntil = 0;
-                    session_regenerate_id(true);
-                    $_SESSION['pima_auth']          = true;
-                    $_SESSION['pima_auth_key']      = $authKey;
-                    $_SESSION['pima_last_activity'] = time();
-                    $_SESSION['csrf']               = bin2hex(random_bytes(16));
-                    $csrf = $_SESSION['csrf'];
-                } else {
-                    $attempts++;
-                    if ($attempts >= $maxAttempts) $lockedUntil = time() + $lockoutSecs;
-                    $isLocked = time() < $lockedUntil;
-                    $authError = true;
-                }
-            }
-
-            $json = (string) json_encode(['attempts' => $attempts, 'locked_until' => $lockedUntil]);
-            rewind($fh);
-            ftruncate($fh, 0);
-            if (fwrite($fh, $json) !== strlen($json)) $authUnavailable = true;
-            fflush($fh);
-            flock($fh, LOCK_UN);
-            fclose($fh);
+        $pw    = is_scalar($_POST['password']) ? (string) $_POST['password'] : '';
+        $check = pimaLockedCheck($lockFile, $maxAttempts, $lockoutSecs,
+            function () use ($pw, $storedPassword): bool { return pimaPasswordVerify($pw, $storedPassword); });
+        $attempts    = $check['attempts'];
+        $lockedUntil = $check['locked_until'];
+        if ($check['result'] === 'unavailable' || !$check['saved']) $authUnavailable = true;
+        if ($check['result'] === 'locked') {
+            $isLocked = true;
+        } elseif ($check['result'] === 'fail') {
+            $authError = true;
+        } elseif ($check['result'] === 'ok') {
+            session_regenerate_id(true);
+            $_SESSION['pima_auth']          = true;
+            $_SESSION['pima_auth_key']      = $authKey;
+            $_SESSION['pima_login_at']      = time();
+            $_SESSION['pima_last_activity'] = time();
+            $_SESSION['csrf']               = bin2hex(random_bytes(16));
+            $csrf = $_SESSION['csrf'];
         }
 
         if ($isLocked) sleep(min(3, max(1, $lockedUntil - time())));
@@ -161,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout']) && $csrfOk)
         setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
     }
     session_destroy();
-    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+    header('Location: ' . $selfUrl);
     exit;
 }
 $authed = !empty($_SESSION['pima_auth']);
@@ -265,7 +362,25 @@ $strings = [
         'tip_tod'          => 'Pageviews by local server hour over the last 30 days. Hover over a bar for the exact count.',
         'tip_device'       => 'Device distribution by visitor-day over the last 30 days.',
         'tip_countries'    => 'Detected country by visitor-day over the last 30 days. Unknown values are excluded.',
-        'warn_default_pw'  => '⚠ Default password in use — change it in pima-core.php immediately.',
+        'warn_default_pw'  => '⚠ Sign-in is locked: no password of your own is set. Set STATS_PASSWORD in pima-core.php.',
+        'pw_link'          => 'Change password',
+        'pw_title'         => 'Change password',
+        'pw_intro'         => 'The new password takes effect immediately. Other devices where you are signed in are signed out.',
+        'pw_current'       => 'Current password',
+        'pw_new'           => 'New password',
+        'pw_repeat'        => 'Repeat new password',
+        'pw_rule'          => 'At least 10 characters. A sentence of several words is safe and easy to remember.',
+        'pw_btn'           => 'Change password',
+        'pw_back'          => '← Back to dashboard',
+        'pw_forgot'        => 'Forgot your password? Whoever looks after your website can reset it.',
+        'pw_done'          => 'Your password has been changed. You stay signed in.',
+        'pw_err_session'   => 'Your session has expired. Please try again.',
+        'pw_err_current'   => 'The current password is not correct.',
+        'pw_err_repeat'    => 'The two new passwords do not match.',
+        'pw_err_short'     => 'The new password needs at least 10 characters.',
+        'pw_err_same'      => 'The new password is the same as the current one.',
+        'pw_err_write'     => 'The password could not be saved; the previous one still applies. Check that pima-cache is writable.',
+        'pw_err_file'      => '⚠ Sign-in is locked because the password file pima-cache/.pima-password is damaged. Delete it via FTP; the password from pima-core.php then applies again.',
     ],
     'de' => [
         'dashboard'        => 'Analyse-Dashboard',
@@ -348,11 +463,81 @@ $strings = [
         'tip_tod'          => 'Seitenaufrufe nach lokaler Server-Uhrzeit in den letzten 30 Tagen. Der Balken zeigt die genaue Anzahl.',
         'tip_device'       => 'Geräteverteilung nach Besuchertagen der letzten 30 Tage.',
         'tip_countries'    => 'Erkanntes Herkunftsland nach Besuchertagen der letzten 30 Tage. Unbekannte Werte sind ausgeschlossen.',
-        'warn_default_pw'  => '⚠ Standard-Passwort aktiv — bitte in pima-core.php sofort ändern.',
+        'warn_default_pw'  => '⚠ Anmeldung gesperrt: Es ist kein eigenes Passwort gesetzt. Bitte STATS_PASSWORD in pima-core.php setzen.',
+        'pw_link'          => 'Passwort ändern',
+        'pw_title'         => 'Passwort ändern',
+        'pw_intro'         => 'Das neue Passwort gilt sofort. Andere Geräte, auf denen du angemeldet bist, werden dabei abgemeldet.',
+        'pw_current'       => 'Aktuelles Passwort',
+        'pw_new'           => 'Neues Passwort',
+        'pw_repeat'        => 'Neues Passwort wiederholen',
+        'pw_rule'          => 'Mindestens 10 Zeichen. Ein Satz aus mehreren Wörtern ist sicher und leicht zu merken.',
+        'pw_btn'           => 'Passwort ändern',
+        'pw_back'          => '← Zurück zum Dashboard',
+        'pw_forgot'        => 'Passwort vergessen? Deine Website-Betreuung kann es zurücksetzen.',
+        'pw_done'          => 'Das Passwort ist geändert. Du bleibst angemeldet.',
+        'pw_err_session'   => 'Die Sitzung ist abgelaufen. Bitte versuche es erneut.',
+        'pw_err_current'   => 'Das aktuelle Passwort stimmt nicht.',
+        'pw_err_repeat'    => 'Die beiden neuen Passwörter stimmen nicht überein.',
+        'pw_err_short'     => 'Das neue Passwort braucht mindestens 10 Zeichen.',
+        'pw_err_same'      => 'Das neue Passwort ist dasselbe wie das bisherige.',
+        'pw_err_write'     => 'Das Passwort ließ sich nicht speichern, es gilt weiterhin das bisherige. Prüfe die Schreibrechte von pima-cache.',
+        'pw_err_file'      => '⚠ Die Anmeldung ist gesperrt, weil die Passwortdatei pima-cache/.pima-password beschädigt ist. Lösche sie per FTP, dann gilt wieder das Passwort aus pima-core.php.',
     ],
 ];
 $lang = defined('LANG') ? LANG : 'en';
 $t = $strings[$lang] ?? $strings['en'];
+
+// ---- Change password ----
+// Only signed in and only while STATS_PASSWORD_CHANGE allows it. Checking the
+// current password counts towards the same per-IP lockout as the login, so an
+// unattended open session cannot be used to guess it and lock the owner out.
+$pwChange  = $authed && $pwChangeEnabled;
+$pwView    = $pwChange && isset($_GET['password']);
+$pwMsg     = '';
+$pwMsgType = '';
+if ($pwChange && ($_GET['password'] ?? '') === 'done') {
+    $pwMsg     = $t['pw_done'];
+    $pwMsgType = 'success';
+}
+if ($pwChange && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pw_change'])) {
+    $pwView    = true;
+    $pwMsgType = 'error';
+    $pwCurrent = isset($_POST['pw_current']) && is_string($_POST['pw_current']) ? $_POST['pw_current'] : '';
+    $pwNew     = isset($_POST['pw_new'])     && is_string($_POST['pw_new'])     ? $_POST['pw_new']     : '';
+    $pwRepeat  = isset($_POST['pw_repeat'])  && is_string($_POST['pw_repeat'])  ? $_POST['pw_repeat']  : '';
+    if (!$csrfOk) {
+        $pwMsg = $t['pw_err_session'];
+    } else {
+        $check = pimaLockedCheck($lockFile, $maxAttempts, $lockoutSecs,
+            function () use ($pwCurrent, $storedPassword): bool { return pimaPasswordVerify($pwCurrent, $storedPassword); });
+        if ($check['result'] === 'unavailable' || ($check['result'] !== 'ok' && !$check['saved'])) {
+            $pwMsg = $t['auth_unavailable'];
+        } elseif ($check['result'] === 'locked') {
+            $secs  = max(1, $check['locked_until'] - time());
+            $pwMsg = sprintf($t['locked_out'], $secs > 60 ? round($secs / 60) . ' min' : $secs . ' sec');
+            sleep(min(3, $secs));
+        } elseif ($check['result'] === 'fail') {
+            $pwMsg = $t['pw_err_current'];
+            sleep(min(8, max(1, $check['attempts'])));
+        } else {
+            $err  = pimaPasswordRules($pwCurrent, $pwNew, $pwRepeat);
+            $hash = $err === '' ? pimaPasswordWrite($pwNew) : null;
+            if ($err !== '') {
+                $pwMsg = $t[$err];
+            } elseif ($hash === null) {
+                $pwMsg = $t['pw_err_write'];
+            } else {
+                // This session stays signed in; all others end on their next
+                // request because their key no longer matches.
+                session_regenerate_id(true);
+                $_SESSION['pima_auth_key'] = hash('sha256', $hash);
+                $_SESSION['csrf']          = bin2hex(random_bytes(16));
+                header('Location: ' . $selfUrl . '?password=done');
+                exit;
+            }
+        }
+    }
+}
 
 // ---- DB helper ----
 function openDb(): ?SQLite3 {
@@ -898,6 +1083,16 @@ if ($isLocked) {
   .confirm-box.visible { display:block; }
   .confirm-box p { font-size:.8rem; color:var(--danger); margin-bottom:.5rem; }
 
+  .pw-card { max-width:440px; margin:1rem auto 14px; }
+  .pw-card > p { font-size:.82rem; color:var(--muted); line-height:1.5; margin-bottom:1rem; }
+  .pw-form label { display:block; font-size:.78rem; font-weight:600; margin:.9rem 0 .35rem; }
+  .pw-form input[type=password] { width:100%; padding:.65rem .85rem; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:.9rem; outline:0; transition:border-color .2s, box-shadow .2s; }
+  .pw-form input[type=password]:focus { border-color:var(--accent); box-shadow:0 0 0 3px <?= htmlspecialchars($brandColor) ?>22; }
+  .pw-form button { margin-top:1.25rem; padding:.65rem 1.25rem; background:var(--accent); color:#fff; border:0; border-radius:8px; font-family:inherit; font-size:.88rem; font-weight:600; cursor:pointer; transition:opacity .15s; }
+  .pw-form button:hover { opacity:.88; }
+  .pw-hint { font-size:.72rem; color:var(--muted); margin-top:.5rem; line-height:1.5; }
+  .pw-back { margin-top:1rem; font-size:.8rem; }
+  .pw-back a { color:var(--accent); }
   .alert-success { background:#e8f5e9; border:1px solid #a5d6a7; color:#2d6a4f; padding:.6rem 1rem; border-radius:8px; font-size:.82rem; margin-bottom:1rem; }
   .file-info { font-size:.72rem; color:var(--muted); margin-top:.75rem; }
   .section-note { font-size:.72rem; color:var(--muted); margin-top:.5rem; }
@@ -954,8 +1149,8 @@ if ($isLocked) {
       <img src="<?= $pimaLogoLight ?>" alt="pima Analytics" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
     <?php endif; ?>
     <p class="sub"><?= htmlspecialchars($brandName) ?></p>
-    <?php if (STATS_PASSWORD === 'change-me-please'): ?>
-      <div class="login-error" style="background:#f87171;color:#fff;border-color:#f87171"><?= $t['warn_default_pw'] ?></div>
+    <?php if ($defaultPassword): ?>
+      <div class="login-error" style="background:#f87171;color:#fff;border-color:#f87171"><?= $t[$pwOverride === '' ? 'pw_err_file' : 'warn_default_pw'] ?></div>
     <?php endif; ?>
     <?php if (!empty($authUnavailable)): ?>
       <div class="login-error"><?= htmlspecialchars($t['auth_unavailable']) ?></div>
@@ -973,8 +1168,8 @@ if ($isLocked) {
     <?php endif; ?>
     <form method="POST">
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
-      <input type="password" name="password" placeholder="<?= $lang === 'de' ? 'Passwort' : 'Password' ?>" autofocus autocomplete="current-password" <?= $isLocked ? 'disabled' : '' ?>>
-      <button type="submit" <?= $isLocked ? 'disabled' : '' ?>><?= $t['login_btn'] ?></button>
+      <input type="password" name="password" placeholder="<?= $lang === 'de' ? 'Passwort' : 'Password' ?>" autofocus autocomplete="current-password" <?= $isLocked || $defaultPassword ? 'disabled' : '' ?>>
+      <button type="submit" <?= $isLocked || $defaultPassword ? 'disabled' : '' ?>><?= $t['login_btn'] ?></button>
     </form>
   </div>
 </div>
@@ -990,6 +1185,7 @@ if ($isLocked) {
     <a href="/" class="btn-ghost"><?= $t['back_to_site'] ?></a>
     <a href="?export=1" class="btn-export"><?= $t['export'] ?></a>
     <a href="?" class="btn-ghost"><?= $t['refresh'] ?></a>
+    <?php if ($pwChange): ?><a href="?password=1" class="btn-ghost"><?= htmlspecialchars($t['pw_link']) ?></a><?php endif; ?>
     <form method="POST">
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
       <button type="submit" name="logout" value="1" class="btn-ghost"><?= $t['logout'] ?></button>
@@ -997,11 +1193,31 @@ if ($isLocked) {
   </div>
 </header>
 
-<?php if (STATS_PASSWORD === 'change-me-please'): ?>
-<div style="background:#f87171;color:#fff;padding:.65rem 1.5rem;font-size:.85rem;font-weight:600;text-align:center"><?= $t['warn_default_pw'] ?></div>
-<?php endif; ?>
-
 <main>
+
+<?php if ($pwView): ?>
+<div class="card pw-card">
+  <h2><?= htmlspecialchars($t['pw_title']) ?></h2>
+  <p><?= htmlspecialchars($t['pw_intro']) ?></p>
+  <?php if ($pwMsg): ?><div class="<?= $pwMsgType === 'success' ? 'alert-success' : 'login-error' ?>" role="status"><?= htmlspecialchars($pwMsg) ?></div><?php endif; ?>
+  <?php if ($pwMsgType !== 'success'): ?>
+  <form method="POST" action="?password=1" class="pw-form">
+    <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf) ?>">
+    <input type="hidden" name="pw_change" value="1">
+    <label for="pw_cur"><?= htmlspecialchars($t['pw_current']) ?></label>
+    <input type="password" id="pw_cur" name="pw_current" autocomplete="current-password" required>
+    <label for="pw_new"><?= htmlspecialchars($t['pw_new']) ?></label>
+    <input type="password" id="pw_new" name="pw_new" autocomplete="new-password" minlength="10" required aria-describedby="pw_new_h">
+    <p class="pw-hint" id="pw_new_h"><?= htmlspecialchars($t['pw_rule']) ?></p>
+    <label for="pw_rep"><?= htmlspecialchars($t['pw_repeat']) ?></label>
+    <input type="password" id="pw_rep" name="pw_repeat" autocomplete="new-password" minlength="10" required>
+    <button type="submit"><?= htmlspecialchars($t['pw_btn']) ?></button>
+  </form>
+  <?php endif; ?>
+  <p class="pw-hint"><?= htmlspecialchars($t['pw_forgot']) ?></p>
+  <p class="pw-back"><a href="?"><?= htmlspecialchars($t['pw_back']) ?></a></p>
+</div>
+<?php else: ?>
 
 <?php if (!empty($clearSuccess)): ?>
   <div class="alert-success"><?= $t['cleared'] ?></div>
@@ -1345,6 +1561,8 @@ if ($isLocked) {
   </div>
 </div>
 <?php endif; ?>
+
+<?php endif; // pwView ?>
 
 </main>
 

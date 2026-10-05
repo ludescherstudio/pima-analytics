@@ -4,7 +4,12 @@
 // ============================================================
 
 // --- Auth ---
+// Dashboard password (plaintext or password_hash() value). The shipped value
+// locks sign-in — set your own before going live.
 define('STATS_PASSWORD', 'change-me-please');
+// Users may change the password in the dashboard. It is then stored in
+// pima-cache/.pima-password; delete that file to reset to STATS_PASSWORD.
+define('STATS_PASSWORD_CHANGE', true);
 
 // --- Tracker token ---
 // A public identifier that goes into your tracking snippet.
@@ -71,6 +76,7 @@ define('TREND_DAYS', 14);
 define('MAX_LOGIN_ATTEMPTS', 5);
 define('LOCKOUT_SECONDS', 900); // 15 minutes
 define('SESSION_IDLE_SECONDS', 1800); // 30 minutes
+define('SESSION_MAX_SECONDS', 43200); // sign in again after 12 hours at the latest
 
 // --- Tracker abuse protection ---
 define('TRACKER_RATE_LIMIT', 120); // accepted hits per IP bucket

@@ -22,6 +22,7 @@ alongside client work — timelines are best-effort, not contractual.
 **In scope**
 
 - Bypassing the dashboard login, its CSRF protection, or its per-IP lockout
+- Changing the dashboard password without knowing the current one
 - Reading `analytics.db` — or any `pima-cache/` file — over HTTP on a server
   that has the documented `.htaccess` in place
 - SQL injection through any tracker parameter (`p`, `r`, `title`) or through
@@ -39,9 +40,9 @@ alongside client work — timelines are best-effort, not contractual.
 
 **Out of scope**
 
-- A site running the shipped default password (`change-me-please`). The
-  dashboard shows a permanent red warning banner on both the login screen and
-  the dashboard for exactly this; changing it is step one of every install.
+- A site whose operator has deliberately replaced the shipped password with a
+  weak one. The shipped value itself (`change-me-please`) and an empty value
+  fail closed: nobody can sign in until a password of your own is set.
 - Fake pageviews injected by someone who read `TRACKER_TOKEN` out of a page's
   HTML source. The token is embedded in every tracked page and is therefore
   **public by design** — it raises the bar against drive-by noise, nothing
@@ -63,6 +64,9 @@ alongside client work — timelines are best-effort, not contractual.
 
 - Set a strong `STATS_PASSWORD`. `password_hash()` output is supported and
   preferred — pima detects it automatically by the leading `$`.
+- A password changed in the dashboard lives in `pima-cache/.pima-password`
+  and takes precedence over `STATS_PASSWORD`. Delete that file to reset it;
+  set `STATS_PASSWORD_CHANGE` to `false` if only you should set the password.
 - Verify that `.htaccess` actually denies `pima-core.php` (it holds the
   password and the tracker token) by requesting `/pima-core.php` in a browser
   and confirming a 403 rather than a blank page.
