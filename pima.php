@@ -295,27 +295,26 @@ $strings = [
         'tagline'          => 'measure more. manage less.',
         'login_btn'        => 'Sign in',
         'wrong_password'   => 'That password is not correct.',
-        'auth_unavailable' => 'Signing in is not possible right now: the login lockout in pima-cache cannot be written. Check that pima-cache is writable. (Code T15)',
+        'auth_unavailable' => 'Signing in is not possible right now: pima-cache is not writable. (Code T15)',
         'attempts_left'    => '%d attempt%s remaining before lockout.',
         'locked_out'       => 'Too many failed attempts. Please try again in %s.',
         'summary'                => 'Your site had <strong>%s pageviews</strong> in the last 30 days.',
-        'summary_avg_full'        => 'An average of <strong>%s pageviews</strong> per calendar day in this period.',
-        'summary_avg_partial'     => 'An average of <strong>%s pageviews</strong> per calendar day since tracking began (%d day%s).',
+        'summary_avg_full'        => 'That is <strong>%s</strong> per day on average.',
+        'summary_avg_partial'     => 'That is <strong>%s</strong> per day on average (%d day%s of data so far).',
         'total_views'      => 'Pageviews',
         'all_time'         => 'all time',
         'today'            => 'Today',
         'visitors'         => 'visitors',
-        'tip_daily_visitors' => 'Estimated visitors today. Multiple pageviews with the same daily anonymous identifier count once.',
+        'tip_daily_visitors' => 'Estimated. Repeat pageviews by the same visitor on the same day count once.',
         'win_7'            => 'Last 7 days',
         'win_30'           => 'Last 30 days',
         'vs_prev_7'        => 'vs. previous 7 days',
         'vs_prev_30'       => 'vs. previous 30 days',
         'visitor_days'     => 'visitor-days',
-        'tip_visitor_days' => 'Counted per day: someone who visits on three different days counts three times. The visitor hash is re-salted every night, so nobody is recognised across days — which is exactly why this is not a headcount.',
+        'tip_visitor_days' => 'Counted per day: someone who visits on three days counts three times. Visitors are not recognised across days.',
         'trend'            => '-day trend',
         'top_pages'        => 'Top pages',
         'win_30_label'     => 'last 30 days',
-        'change_label'     => 'Last 30 days · absolute change in pageviews vs. previous 30 days',
         'referrers'        => 'Referrers',
         'entry_pages'      => 'Entry pages',
         'browser_lang'     => 'Browser language',
@@ -329,7 +328,7 @@ $strings = [
         'ch_organic'       => 'Organic search',
         'ch_social'        => 'Social',
         'ch_referral'      => 'Referral',
-        'tip_channels'     => 'Share of entries in the last 30 days: direct, search, social media, or another website. Internal navigation is excluded.',
+        'tip_channels'     => 'How visitors arrived: directly, via search, social media or another website.',
         'recent_hits'      => 'Latest %d pageviews',
         'th_date'          => 'Date',
         'th_time'          => 'Time',
@@ -346,9 +345,6 @@ $strings = [
         'no_channels'      => 'No classified entries yet',
         'no_lang'          => 'No data yet',
         'no_geo'           => 'Geo disabled or no data',
-        'entry_note'       => 'External entries in the last 30 days; reloads can count again.',
-        'visitor_days_note'=> 'Visitor-days in the last 30 days; one visitor can count once per day.',
-        'known_values_note'=> 'Visitor-days with a detected value; unknown values are excluded.',
         'device_desktop'   => 'Desktop',
         'device_mobile'    => 'Mobile',
         'device_tablet'    => 'Tablet',
@@ -359,68 +355,65 @@ $strings = [
         'back_to_site'     => '↗ Visit website',
         'export'           => '↓ Export CSV',
         'rows'             => 'entries',
-        'cleared'          => 'All data cleared successfully.',
+        'cleared'          => 'All data cleared.',
         'danger_title'     => '⚠ Danger zone',
-        'danger_desc'      => 'These actions are irreversible. Only visible because ADVANCED_MODE is enabled in pima-core.php.',
+        'danger_desc'      => 'These actions cannot be undone.',
         'clear_btn'        => 'Clear all data',
-        'confirm_msg'      => 'This will permanently delete all %s entries. Are you sure?',
+        'confirm_msg'      => 'Permanently delete all %s entries?',
         'confirm_btn'      => 'Yes, delete everything',
-        'tip_trend'        => 'Daily pageviews and estimated daily visitors over the last %d days.',
-        'tip_pages'        => 'Most visited pages in the last 30 days, with change vs. the previous 30 days.',
-        'tip_referrers'    => 'External websites that generated entries in the last 30 days. Counts are entries, not people.',
-        'tip_entry'        => 'Pages opened with an external referrer in the last 30 days. Direct entries are not included.',
-        'tip_lang'         => 'Browser language by visitor-day in the last 30 days. Unknown values are excluded.',
-        'tip_tod'          => 'Pageviews by hour in the configured time zone over the last 30 days. Hover over a bar for the exact count.',
-        'tip_device'       => 'Device distribution by visitor-day over the last 30 days.',
-        'tip_countries'    => 'Detected country by visitor-day over the last 30 days. Unknown values are excluded.',
+        'tip_trend'        => 'Pageviews and estimated visitors per day.',
+        'tip_pages'        => 'Change compared with the previous 30 days.',
+        'tip_referrers'    => 'Websites visitors came from. Counted per entry, not per person.',
+        'tip_entry'        => 'Pages visitors landed on from another website.',
+        'tip_lang'         => 'By visitor-day. Unknown values are excluded.',
+        'tip_tod'          => 'Pageviews per hour in the configured time zone.',
+        'tip_device'       => 'By visitor-day.',
+        'tip_countries'    => 'By visitor-day. Unknown values are excluded.',
         'warn_default_pw'  => 'Sign-in is disabled until a password of your own is set as STATS_PASSWORD in pima-core.php. (Code T8)',
         'password_ph'      => 'Password',
         'login_help'       => 'Forgot your password? Whoever looks after your website can reset it.',
         'pw_link'          => 'Change password',
         'pw_title'         => 'Change password',
-        'pw_intro'         => 'The new password takes effect immediately. Other devices where you are signed in are signed out.',
         'pw_current'       => 'Current password',
         'pw_new'           => 'New password',
         'pw_repeat'        => 'Repeat new password',
-        'pw_rule'          => 'At least 10 characters. A sentence of several words is safe and easy to remember.',
+        'pw_rule'          => 'At least 10 characters.',
         'pw_btn'           => 'Change password',
         'pw_back'          => '← Back to dashboard',
-        'pw_forgot'        => 'Forgot your password? Whoever looks after your website can reset it.',
-        'pw_done'          => 'Your password has been changed. You stay signed in.',
+        'pw_done'          => 'Password changed.',
         'pw_err_session'   => 'The page was open for too long. Please try again.',
-        'pw_err_current'   => 'The current password is not correct.',
-        'pw_err_repeat'    => 'The two new passwords do not match.',
+        'pw_err_current'   => 'The current password is wrong.',
+        'pw_err_repeat'    => 'The new passwords do not match.',
         'pw_err_short'     => 'The new password needs at least 10 characters.',
         'pw_err_same'      => 'The new password is the same as the current one.',
-        'pw_err_write'     => 'The password could not be saved; the previous one still applies. Check that pima-cache is writable. (Code T20)',
-        'pw_err_file'      => 'Sign-in is locked because the password file pima-cache/.pima-password is damaged. Delete it via FTP; the password from pima-core.php then applies again. (Code T20)',
+        'pw_err_write'     => 'The password could not be saved. Check that pima-cache is writable. (Code T20)',
+        'pw_err_file'      => 'Sign-in is locked: the password file pima-cache/.pima-password is damaged. Delete it to fall back to the password in pima-core.php. (Code T20)',
     ],
     'de' => [
         'dashboard'        => 'Analyse-Dashboard',
         'tagline'          => 'mehr messen. weniger verwalten.',
         'login_btn'        => 'Anmelden',
         'wrong_password'   => 'Das Passwort stimmt nicht.',
-        'auth_unavailable' => 'Die Anmeldung ist gerade nicht möglich: Die Login-Sperre in pima-cache lässt sich nicht schreiben. Bitte prüfen Sie die Schreibrechte von pima-cache. (Code T15)',
+        'auth_unavailable' => 'Die Anmeldung ist gerade nicht möglich: pima-cache ist nicht beschreibbar. (Code T15)',
         'attempts_left'    => 'Noch %d Versuch%s bis zur Sperre.',
         'locked_out'       => 'Zu viele Fehlversuche. Bitte versuchen Sie es in %s erneut.',
         'summary'                => 'Ihre Website hatte in den letzten 30 Tagen <strong>%s Seitenaufrufe</strong>.',
-        'summary_avg_full'        => 'Im Schnitt <strong>%s Seitenaufrufe</strong> pro Kalendertag in diesem Zeitraum.',
-        'summary_avg_partial'     => 'Im Schnitt <strong>%s Seitenaufrufe</strong> pro Kalendertag seit Aufzeichnungsbeginn (%d Kalendertag%s).',
+        'summary_avg_full'        => 'Das sind im Schnitt <strong>%s</strong> pro Tag.',
+        'summary_avg_partial'     => 'Das sind im Schnitt <strong>%s</strong> pro Tag (bisher %d Tag%s mit Daten).',
         'total_views'      => 'Seitenaufrufe',
         'all_time'         => 'gesamt',
         'today'            => 'Heute',
         'visitors'         => 'Besucher',
-        'tip_daily_visitors' => 'Geschätzte Besucher heute. Mehrere Seitenaufrufe mit derselben täglichen anonymen Kennung zählen einmal.',
+        'tip_daily_visitors' => 'Geschätzt. Mehrere Seitenaufrufe derselben Person am selben Tag zählen einmal.',
         'win_7'            => 'Letzte 7 Tage',
         'win_30'           => 'Letzte 30 Tage',
         'vs_prev_7'        => 'vs. vorherige 7 Tage',
         'vs_prev_30'       => 'vs. vorherige 30 Tage',
         'visitor_days'     => 'Besuchertage',
-        'tip_visitor_days' => 'Pro Tag gezählt: Wer an drei verschiedenen Tagen kommt, zählt dreifach. Der Besucher-Hash wird jede Nacht neu gesalzen, niemand wird über Tage hinweg wiedererkannt — genau deshalb ist das keine Personenzahl.',
+        'tip_visitor_days' => 'Pro Tag gezählt: Wer an drei Tagen kommt, zählt dreifach. Besucher werden über Tage hinweg nicht wiedererkannt.',
         'trend'            => '-Tage-Verlauf',
         'top_pages'        => 'Meistbesuchte Seiten',
         'win_30_label'     => 'letzte 30 Tage',
-        'change_label'     => 'Letzte 30 Tage · absolute Änderung der Seitenaufrufe vs. vorherige 30 Tage',
         'referrers'        => 'Verweisende Websites',
         'entry_pages'      => 'Einstiegsseiten',
         'browser_lang'     => 'Browsersprache',
@@ -434,7 +427,7 @@ $strings = [
         'ch_organic'       => 'Organische Suche',
         'ch_social'        => 'Social Media',
         'ch_referral'      => 'Verweise',
-        'tip_channels'     => 'Anteil der Einstiege der letzten 30 Tage: direkt, Suche, Social Media oder andere Websites. Interne Navigation ist ausgeschlossen.',
+        'tip_channels'     => 'Wie Besucher kamen: direkt, über Suche, Social Media oder eine andere Website.',
         'recent_hits'      => 'Letzte %d Seitenaufrufe',
         'th_date'          => 'Datum',
         'th_time'          => 'Uhrzeit',
@@ -451,9 +444,6 @@ $strings = [
         'no_channels'      => 'Noch keine klassifizierten Einstiege',
         'no_lang'          => 'Noch keine Daten',
         'no_geo'           => 'Geo deaktiviert oder keine Daten',
-        'entry_note'       => 'Externe Einstiege der letzten 30 Tage; Neuladen kann erneut zählen.',
-        'visitor_days_note'=> 'Besuchertage der letzten 30 Tage; ein Besucher kann pro Tag einmal zählen.',
-        'known_values_note'=> 'Besuchertage mit erkanntem Wert; unbekannte Werte sind ausgeschlossen.',
         'device_desktop'   => 'Desktop',
         'device_mobile'    => 'Mobil',
         'device_tablet'    => 'Tablet',
@@ -464,41 +454,39 @@ $strings = [
         'back_to_site'     => '↗ Zur Website',
         'export'           => '↓ CSV exportieren',
         'rows'             => 'Einträge',
-        'cleared'          => 'Alle Daten wurden erfolgreich gelöscht.',
+        'cleared'          => 'Alle Daten gelöscht.',
         'danger_title'     => '⚠ Gefahrenzone',
-        'danger_desc'      => 'Diese Aktionen sind unwiderruflich. Nur sichtbar, weil ADVANCED_MODE in pima-core.php aktiviert ist.',
+        'danger_desc'      => 'Diese Aktionen lassen sich nicht rückgängig machen.',
         'clear_btn'        => 'Alle Daten löschen',
-        'confirm_msg'      => 'Dadurch werden alle %s Einträge dauerhaft gelöscht. Sind Sie sicher?',
+        'confirm_msg'      => 'Alle %s Einträge endgültig löschen?',
         'confirm_btn'      => 'Ja, alles löschen',
-        'tip_trend'        => 'Tägliche Seitenaufrufe und geschätzte tägliche Besucher der letzten %d Tage.',
-        'tip_pages'        => 'Meistbesuchte Seiten der letzten 30 Tage, mit Änderung vs. vorherige 30 Tage.',
-        'tip_referrers'    => 'Externe Websites, die in den letzten 30 Tagen Einstiege erzeugt haben. Gezählt werden Einstiege, nicht Personen.',
-        'tip_entry'        => 'Seiten, die in den letzten 30 Tagen mit externem Referrer geöffnet wurden. Direkte Einstiege sind nicht enthalten.',
-        'tip_lang'         => 'Browsersprache nach Besuchertagen der letzten 30 Tage. Unbekannte Werte sind ausgeschlossen.',
-        'tip_tod'          => 'Seitenaufrufe nach Stunde in der eingestellten Zeitzone, letzte 30 Tage. Fahren Sie mit der Maus über einen Balken, um die genaue Anzahl zu sehen.',
-        'tip_device'       => 'Geräteverteilung nach Besuchertagen der letzten 30 Tage.',
-        'tip_countries'    => 'Erkanntes Herkunftsland nach Besuchertagen der letzten 30 Tage. Unbekannte Werte sind ausgeschlossen.',
+        'tip_trend'        => 'Seitenaufrufe und geschätzte Besucher pro Tag.',
+        'tip_pages'        => 'Änderung gegenüber den vorherigen 30 Tagen.',
+        'tip_referrers'    => 'Websites, von denen Besucher kamen. Gezählt pro Einstieg, nicht pro Person.',
+        'tip_entry'        => 'Seiten, auf denen Besucher von einer anderen Website ankamen.',
+        'tip_lang'         => 'Nach Besuchertagen. Unbekannte Werte sind ausgeschlossen.',
+        'tip_tod'          => 'Seitenaufrufe pro Stunde in der eingestellten Zeitzone.',
+        'tip_device'       => 'Nach Besuchertagen.',
+        'tip_countries'    => 'Nach Besuchertagen. Unbekannte Werte sind ausgeschlossen.',
         'warn_default_pw'  => 'Die Anmeldung ist gesperrt, bis in pima-core.php ein eigenes Passwort als STATS_PASSWORD gesetzt ist. (Code T8)',
         'password_ph'      => 'Passwort',
         'login_help'       => 'Passwort vergessen? Ihre Website-Betreuung kann es zurücksetzen.',
         'pw_link'          => 'Passwort ändern',
         'pw_title'         => 'Passwort ändern',
-        'pw_intro'         => 'Das neue Passwort gilt sofort. Andere Geräte, auf denen Sie angemeldet sind, werden dabei abgemeldet.',
         'pw_current'       => 'Aktuelles Passwort',
         'pw_new'           => 'Neues Passwort',
         'pw_repeat'        => 'Neues Passwort wiederholen',
-        'pw_rule'          => 'Mindestens 10 Zeichen. Ein Satz aus mehreren Wörtern ist sicher und leicht zu merken.',
+        'pw_rule'          => 'Mindestens 10 Zeichen.',
         'pw_btn'           => 'Passwort ändern',
         'pw_back'          => '← Zurück zum Dashboard',
-        'pw_forgot'        => 'Passwort vergessen? Ihre Website-Betreuung kann es zurücksetzen.',
-        'pw_done'          => 'Das Passwort ist geändert. Sie bleiben angemeldet.',
+        'pw_done'          => 'Passwort geändert.',
         'pw_err_session'   => 'Die Seite war zu lange geöffnet. Bitte versuchen Sie es erneut.',
         'pw_err_current'   => 'Das aktuelle Passwort stimmt nicht.',
-        'pw_err_repeat'    => 'Die beiden neuen Passwörter stimmen nicht überein.',
+        'pw_err_repeat'    => 'Die neuen Passwörter stimmen nicht überein.',
         'pw_err_short'     => 'Das neue Passwort braucht mindestens 10 Zeichen.',
         'pw_err_same'      => 'Das neue Passwort ist dasselbe wie das bisherige.',
-        'pw_err_write'     => 'Das Passwort ließ sich nicht speichern, es gilt weiterhin das bisherige. Bitte prüfen Sie die Schreibrechte von pima-cache. (Code T20)',
-        'pw_err_file'      => 'Die Anmeldung ist gesperrt, weil die Passwortdatei pima-cache/.pima-password beschädigt ist. Löschen Sie sie per FTP, dann gilt wieder das Passwort aus pima-core.php. (Code T20)',
+        'pw_err_write'     => 'Das Passwort ließ sich nicht speichern. Bitte prüfen Sie die Schreibrechte von pima-cache. (Code T20)',
+        'pw_err_file'      => 'Die Anmeldung ist gesperrt: Die Passwortdatei pima-cache/.pima-password ist beschädigt. Löschen Sie sie, dann gilt wieder das Passwort aus pima-core.php. (Code T20)',
     ],
 ];
 $lang = defined('LANG') ? LANG : 'en';
@@ -1260,7 +1248,6 @@ if ($isLocked) {
 <?php if ($pwView): ?>
 <div class="card pw-card">
   <h2><?= htmlspecialchars($t['pw_title']) ?></h2>
-  <p><?= htmlspecialchars($t['pw_intro']) ?></p>
   <?php if ($pwMsg): ?><div class="<?= $pwMsgType === 'success' ? 'alert-success' : 'login-error' ?>" role="status"><?= htmlspecialchars($pwMsg) ?></div><?php endif; ?>
   <?php if ($pwMsgType !== 'success'): ?>
   <form method="POST" action="?password=1" class="pw-form">
@@ -1276,7 +1263,6 @@ if ($isLocked) {
     <button type="submit"><?= htmlspecialchars($t['pw_btn']) ?></button>
   </form>
   <?php endif; ?>
-  <p class="pw-hint"><?= htmlspecialchars($t['pw_forgot']) ?></p>
   <p class="pw-back"><a href="?"><?= htmlspecialchars($t['pw_back']) ?></a></p>
 </div>
 <?php else: ?>
@@ -1417,7 +1403,6 @@ if ($isLocked) {
         <span class="dev-pct"><?= $pct ?>%</span>
       </div>
     <?php endforeach; ?>
-    <p class="section-note"><?= htmlspecialchars($t['visitor_days_note']) ?></p>
   </div>
 
   <div class="card">
@@ -1473,7 +1458,6 @@ if ($isLocked) {
         </li>
       <?php endforeach; ?>
       </ul>
-      <p class="section-note"><?= htmlspecialchars($t['change_label']) ?></p>
     <?php endif; ?>
   </div>
 
@@ -1503,7 +1487,6 @@ if ($isLocked) {
         </li>
       <?php endforeach; ?>
       </ul>
-      <p class="section-note"><?= $t['entry_note'] ?></p>
     <?php endif; ?>
   </div>
 </div>
@@ -1544,7 +1527,6 @@ if ($isLocked) {
         </li>
       <?php endforeach; ?>
       </ul>
-      <p class="section-note"><?= htmlspecialchars($t['known_values_note']) ?></p>
     <?php endif; ?>
   </div>
 
@@ -1564,7 +1546,6 @@ if ($isLocked) {
         </li>
       <?php endforeach; ?>
       </ul>
-      <p class="section-note"><?= htmlspecialchars($t['known_values_note']) ?></p>
     <?php endif; ?>
   </div>
 </div>
