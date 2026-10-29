@@ -258,6 +258,8 @@ function initDb(): SQLite3 {
     $db->exec('CREATE INDEX IF NOT EXISTS idx_country ON hits(country)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_vid     ON hits(vid)');
     $db->exec('CREATE INDEX IF NOT EXISTS idx_entry   ON hits(is_entry)');
+    // Lets the dashboard walk sessions in order without a full sort.
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_session ON hits(date, vid, time)');
     $retentionDays = defined('DATA_RETENTION_DAYS') ? (int) DATA_RETENTION_DAYS : 365;
     if ($retentionDays > 0) {
         $pruneFile = dirname(DB_PATH) . '/.last_prune';

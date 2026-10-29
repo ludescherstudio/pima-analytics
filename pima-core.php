@@ -71,7 +71,6 @@ define('BOT_PATTERNS', [
 
 // --- Dashboard display settings ---
 define('RECENT_ENTRIES', 50);
-define('TREND_DAYS', 14);
 
 // --- Brute-force protection ---
 define('MAX_LOGIN_ATTEMPTS', 5);
