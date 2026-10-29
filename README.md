@@ -308,20 +308,20 @@ From top to bottom:
 - **Period** — Today, yesterday, last 7, 30 or 90 days, this month or last month. Every panel follows the selected period; the default is the last 30 days
 - **Filters** — Click a page, referrer, country, device or language in any list to narrow the whole dashboard to it. Active filters appear as chips that remove them again
 - **Summary** — Pageviews in the period and the daily average
-- **Key figures** — Pageviews, visitors (visitor-days for periods longer than a day), sessions, bounce rate, pages per session and session duration, each compared with the previous period
-- **Trend** — Line chart of pageviews, visitors or sessions with the previous period as a dashed line; a single day is shown by hour
+- **Key figures** — Visitors, visits and pageviews, then bounce rate, pages per visit and visit duration, each compared with the previous period. For periods longer than a day, visitors are marked "counted daily"
+- **Trend** — Line chart of visitors, visits or pageviews with the previous period as a dashed line; a single day is shown by hour
 - **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
-- **Device type** — Desktop / Mobile / Tablet by visitor-day
+- **Device type** — Desktop / Mobile / Tablet, visitors counted daily
 - **Time of day** — Pageviews by hour in the configured `TIMEZONE`
 - **Top pages** — Ranked by page title, with the change against the previous period
 - **Entry pages** — Pages opened with an external referrer
-- **Exit pages** — The last page of each session, with its exit rate
-- **Session depth** — Sessions by number of pageviews
+- **Exit pages** — The last page of each visit, with its exit rate
+- **Pages per visit** — Visits by number of pageviews
 - **Weekday and hour** — Heatmap of pageviews, for periods of 7 days or more
 - **Referrers** — External hosts that generated entries
-- **Countries** — Detected countries by visitor-day
-- **Browser language** — Language distribution by visitor-day
-- **Latest sessions** — Source, page path and duration of the newest sessions (collapsed by default)
+- **Countries** — Detected countries, visitors counted daily
+- **Browser language** — Language distribution, visitors counted daily
+- **Latest visits** — Source, page path and duration of the newest visits (collapsed by default)
 - **Active now** — Visitors of the last 5 minutes in the header, updated every minute
 - **Dark mode** — Follows the system setting; the moon button switches it, and the browser remembers the choice
 - **CSV export** — Download all your data anytime
@@ -332,11 +332,16 @@ including today, compared with the 30 days before. "This month" is compared
 with the same days of the previous month, so a few days are never set against
 a full month.
 
-A session is a run of pageviews with the same daily visitor identifier and no
-gap longer than 30 minutes. Sessions are worked out when the dashboard loads;
-the tracker stores nothing extra for them. With a filter, session figures count
-the sessions that contain at least one matching pageview, and a referrer filter
-keeps every pageview of the visitor-days that arrived from that referrer.
+How the three main figures relate: **visitors** are people, **visits** are the
+times they came, **pageviews** are the pages they opened. A visit is a run of
+pageviews by the same visitor with no gap longer than 30 minutes; visits are
+worked out when the dashboard loads, and the tracker stores nothing extra for
+them. Visitors are recognised only within one day, so over a longer period the
+same person counts once per day ("counted daily").
+
+With a filter, visit figures count the visits that contain at least one
+matching pageview, and a referrer filter keeps every pageview of the visitors
+who arrived from that referrer on that day.
 
 The dashboard works on phones as well:
 
@@ -418,7 +423,7 @@ define('SESSION_IDLE_SECONDS',1800);                                 // Dashboar
 define('SESSION_MAX_SECONDS', 43200);                                // Sign in again after 12 hours at the latest
 define('TRACKER_RATE_LIMIT', 120);                                   // Hits per IP bucket/window
 define('TRACKER_RATE_WINDOW',60);                                    // Rate window in seconds
-define('RECENT_ENTRIES',     50);                                    // Sessions in the latest-sessions list
+define('RECENT_ENTRIES',     50);                                    // Visits in the latest-visits list
 define('ADVANCED_MODE',      false);                                 // Enable danger zone in dashboard
 
 // Optional: override single dashboard strings — see Language
@@ -462,6 +467,10 @@ Disable again by setting it back to `false`.
 An update replaces exactly two files: **`pima.php` and `pima-tracker.php`**. Upload both from the same release. `pima-core.php` (your settings, your `$PIMA_STRINGS`) and `pima-cache/` (your data) are never part of an update, and the tracking snippet stays as it is.
 
 Settings added in a later release take their default automatically, so an update never requires editing `pima-core.php`. The version you run is shown in the dashboard footer.
+
+### To 0.6.1
+
+- **Plainer wording, nothing else.** "Sessions" are now "visits", "visitor-days" are "visitors" marked "counted daily", and the key figures start with visitors, visits and pageviews. Tooltips say what a figure means. `$PIMA_STRINGS` keys `kpi_visitor_days`, `tip_daily_visitors` and `tip_visitor_days` were replaced by `counted_daily` and `tip_visitors`.
 
 ### To 0.6
 
@@ -539,9 +548,9 @@ Geo caching or request/login limits; pima recreates them automatically.
 
 ## Honest limitations
 
-- **Estimated daily visitors only** — pima Analytics derives a daily anonymous identifier from a coarsened IP, the User-Agent and a rotating salt. Shared networks can merge visitors and browser changes can split them, so this is an estimate rather than a person count. The identifier cannot be correlated across days; figures for periods longer than a day are therefore explicitly labelled visitor-days. Returning visitors and an all-time visitor count are deliberately not shown.
-- **Sessions end at midnight** — because the identifier changes every night. Session duration runs from the first to the last pageview, so time on the last page is not measured and single-page sessions count as 0 seconds. A reload counts as a second pageview.
-- **Long periods on busy sites** — sessions are worked out when the dashboard loads, from every pageview of the period and the one before. On a site with very many pageviews, "Last 90 days" takes noticeably longer than the shorter periods.
+- **Estimated daily visitors only** — pima Analytics derives a daily anonymous identifier from a coarsened IP, the User-Agent and a rotating salt. Shared networks can merge visitors and browser changes can split them, so this is an estimate rather than a person count. The identifier cannot be correlated across days; for periods longer than a day the dashboard therefore marks visitors as "counted daily". Returning visitors and an all-time visitor count are deliberately not shown.
+- **Visits end at midnight** — because the identifier changes every night. Visit duration runs from the first to the last pageview, so time on the last page is not measured and single-page visits count as 0 seconds. A reload counts as a second pageview.
+- **Long periods on busy sites** — visits are worked out when the dashboard loads, from every pageview of the period and the one before. On a site with very many pageviews, "Last 90 days" takes noticeably longer than the shorter periods.
 - **Entry-based acquisition** — traffic channels classify page entries, not people. Internal navigation is excluded. Browser reloads can create another entry.
 - **Legacy channel data** — after upgrading, old external referrers remain usable. Old empty referrers cannot be distinguished from internal navigation and are therefore excluded instead of being guessed as direct traffic.
 - **Not for high-traffic sites** — SQLite handles millions of rows comfortably, but concurrent write spikes (500+ simultaneous visitors) may cause brief delays.

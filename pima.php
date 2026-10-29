@@ -4,7 +4,7 @@
  * URL: example.com/pima
  */
 
-define('PIMA_VERSION', '0.6.0');
+define('PIMA_VERSION', '0.6.1');
 
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
@@ -332,27 +332,26 @@ $strings = [
         'f_lang'           => 'Language',
         'kpi_views'        => 'Pageviews',
         'kpi_visitors'     => 'Visitors',
-        'kpi_visitor_days' => 'Visitor-days',
-        'tip_views'        => 'Compared with the previous period of the same length.',
-        'tip_daily_visitors' => 'Estimated. Repeat pageviews by the same visitor on the same day count once.',
-        'tip_visitor_days' => 'Counted per day: someone who visits on three days counts three times. Visitors are not recognised across days.',
-        'sessions'         => 'Sessions',
+        'counted_daily'    => 'counted daily',
+        'tip_views'        => 'Pages opened on your site.',
+        'tip_visitors'     => 'People who visited your site.',
+        'sessions'         => 'Visits',
         'bounce_rate'      => 'Bounce rate',
-        'views_per_session'=> 'Pages per session',
-        'session_duration' => 'Session duration',
-        'tip_sessions'     => 'Pageviews by the same visitor with no gap longer than 30 minutes. Every session ends at midnight.',
-        'tip_bounce'       => 'Sessions with a single pageview. Lower is better.',
-        'tip_views_per_session' => 'Average pageviews per session.',
-        'tip_duration'     => 'Average time from the first to the last pageview. Single-page sessions count as 0 seconds.',
+        'views_per_session'=> 'Pages per visit',
+        'session_duration' => 'Visit duration',
+        'tip_sessions'     => 'How often people came to your site.',
+        'tip_bounce'       => 'Visits that ended after one page. Lower is better.',
+        'tip_views_per_session' => 'How many pages a visit includes on average.',
+        'tip_duration'     => 'How long a visit lasts on average.',
         'chart_title'      => 'Trend',
         'chart_metric'     => 'Metric',
         'chart_aria'       => 'Line chart for %s compared with the previous period.',
-        'tip_chart'        => 'Dashed: the previous period. A single day is shown by hour.',
+        'tip_chart'        => 'Dashed: the previous period.',
         'top_pages'        => 'Top pages',
         'referrers'        => 'Referrers',
         'entry_pages'      => 'Entry pages',
         'exit_pages'       => 'Exit pages',
-        'session_depth'    => 'Session depth',
+        'session_depth'    => 'Pages per visit',
         'depth_1'          => '1 page',
         'depth_2'          => '2 pages',
         'depth_3'          => '3–4 pages',
@@ -369,14 +368,14 @@ $strings = [
         'ch_organic'       => 'Organic search',
         'ch_social'        => 'Social',
         'ch_referral'      => 'Referral',
-        'tip_channels'     => 'How visitors arrived: directly, via search, social media or another website.',
-        'recent_sessions'  => 'Latest %d sessions',
+        'tip_channels'     => 'How visitors found your site.',
+        'recent_sessions'  => 'Latest %d visits',
         'today_short'      => 'Today',
         'yesterday_short'  => 'Yesterday',
         'pages_count'      => '%d pages',
         'more_pages'       => '+%d more',
         'live_label'       => '%d active',
-        'tip_live'         => 'Visitors in the last 5 minutes. Updates every minute.',
+        'tip_live'         => 'Visitors in the last 5 minutes.',
         'theme_toggle'     => 'Switch between light and dark',
         'show'             => 'Show',
         'hide'             => 'Hide',
@@ -387,7 +386,7 @@ $strings = [
         'no_channels'      => 'No classified entries in this period',
         'no_lang'          => 'No data in this period',
         'no_geo'           => 'Geo disabled or no data',
-        'no_sessions'      => 'No sessions in this period',
+        'no_sessions'      => 'No visits in this period',
         'device_desktop'   => 'Desktop',
         'device_mobile'    => 'Mobile',
         'device_tablet'    => 'Tablet',
@@ -402,16 +401,16 @@ $strings = [
         'clear_btn'        => 'Clear all data',
         'confirm_msg'      => 'Permanently delete all %s entries?',
         'confirm_btn'      => 'Yes, delete everything',
-        'tip_pages'        => 'Change compared with the previous period. Click a row to filter by it.',
-        'tip_referrers'    => 'Websites visitors came from. Counted per entry, not per person.',
-        'tip_entry'        => 'Pages visitors landed on from another website.',
-        'tip_exit'         => 'The last page of each session. The percentage shows how many of the page\'s pageviews ended a session.',
-        'tip_depth'        => 'Sessions by number of pageviews.',
-        'tip_lang'         => 'By visitor-day. Unknown values are excluded.',
-        'tip_tod'          => 'Pageviews per hour in the configured time zone.',
-        'tip_heatmap'      => 'Pageviews per weekday and hour in the configured time zone.',
-        'tip_device'       => 'By visitor-day.',
-        'tip_countries'    => 'By visitor-day. Unknown values are excluded.',
+        'tip_pages'        => 'Your most visited pages and their change from the previous period.',
+        'tip_referrers'    => 'Websites that sent visitors to you.',
+        'tip_entry'        => 'Pages where visitors from other websites arrived.',
+        'tip_exit'         => 'Pages where visits ended, with their exit rate.',
+        'tip_depth'        => 'How many pages visits include.',
+        'tip_lang'         => 'The language of your visitors\' browsers.',
+        'tip_tod'          => 'When your site is visited.',
+        'tip_heatmap'      => 'When your site is visited during the week.',
+        'tip_device'       => 'Devices your visitors use.',
+        'tip_countries'    => 'Where your visitors are.',
         'warn_default_pw'  => 'Sign-in is disabled until a password of your own is set as STATS_PASSWORD in pima-core.php. (Code T8)',
         'password_ph'      => 'Password',
         'login_help'       => 'Forgot your password? Whoever looks after your website can reset it.',
@@ -473,27 +472,26 @@ $strings = [
         'f_lang'           => 'Sprache',
         'kpi_views'        => 'Seitenaufrufe',
         'kpi_visitors'     => 'Besucher',
-        'kpi_visitor_days' => 'Besuchertage',
-        'tip_views'        => 'Verglichen mit der gleich langen Vorperiode.',
-        'tip_daily_visitors' => 'Geschätzt. Mehrere Seitenaufrufe derselben Person am selben Tag zählen einmal.',
-        'tip_visitor_days' => 'Pro Tag gezählt: Wer an drei Tagen kommt, zählt dreifach. Besucher werden über Tage hinweg nicht wiedererkannt.',
-        'sessions'         => 'Sitzungen',
+        'counted_daily'    => 'täglich gezählt',
+        'tip_views'        => 'Aufgerufene Seiten Ihrer Website.',
+        'tip_visitors'     => 'Personen, die Ihre Website besucht haben.',
+        'sessions'         => 'Besuche',
         'bounce_rate'      => 'Absprungrate',
-        'views_per_session'=> 'Seiten pro Sitzung',
-        'session_duration' => 'Sitzungsdauer',
-        'tip_sessions'     => 'Seitenaufrufe derselben Person ohne Pause über 30 Minuten. Um Mitternacht endet jede Sitzung.',
-        'tip_bounce'       => 'Sitzungen mit nur einem Seitenaufruf. Niedriger ist besser.',
-        'tip_views_per_session' => 'Durchschnittliche Seitenaufrufe pro Sitzung.',
-        'tip_duration'     => 'Durchschnittliche Zeit vom ersten bis zum letzten Seitenaufruf. Sitzungen mit einer Seite zählen als 0 Sekunden.',
+        'views_per_session'=> 'Seiten pro Besuch',
+        'session_duration' => 'Besuchsdauer',
+        'tip_sessions'     => 'Wie oft Personen auf Ihre Website kamen.',
+        'tip_bounce'       => 'Besuche, die nach einer Seite endeten. Niedriger ist besser.',
+        'tip_views_per_session' => 'Wie viele Seiten ein Besuch im Schnitt umfasst.',
+        'tip_duration'     => 'Wie lange ein Besuch im Schnitt dauert.',
         'chart_title'      => 'Verlauf',
         'chart_metric'     => 'Kennzahl',
         'chart_aria'       => 'Liniendiagramm für %s im Vergleich zur Vorperiode.',
-        'tip_chart'        => 'Gestrichelt: die Vorperiode. Ein einzelner Tag wird nach Stunden gezeigt.',
+        'tip_chart'        => 'Gestrichelt: die Vorperiode.',
         'top_pages'        => 'Meistbesuchte Seiten',
         'referrers'        => 'Verweisende Websites',
         'entry_pages'      => 'Einstiegsseiten',
         'exit_pages'       => 'Ausstiegsseiten',
-        'session_depth'    => 'Sitzungstiefe',
+        'session_depth'    => 'Seiten pro Besuch',
         'depth_1'          => '1 Seite',
         'depth_2'          => '2 Seiten',
         'depth_3'          => '3–4 Seiten',
@@ -510,14 +508,14 @@ $strings = [
         'ch_organic'       => 'Organische Suche',
         'ch_social'        => 'Social Media',
         'ch_referral'      => 'Verweise',
-        'tip_channels'     => 'Wie Besucher kamen: direkt, über Suche, Social Media oder eine andere Website.',
-        'recent_sessions'  => 'Letzte %d Sitzungen',
+        'tip_channels'     => 'Wie Besucher Ihre Website gefunden haben.',
+        'recent_sessions'  => 'Letzte %d Besuche',
         'today_short'      => 'Heute',
         'yesterday_short'  => 'Gestern',
         'pages_count'      => '%d Seiten',
         'more_pages'       => '+%d weitere',
         'live_label'       => '%d aktiv',
-        'tip_live'         => 'Besucher der letzten 5 Minuten. Aktualisiert sich jede Minute.',
+        'tip_live'         => 'Besucher der letzten 5 Minuten.',
         'theme_toggle'     => 'Zwischen hell und dunkel wechseln',
         'show'             => 'Anzeigen',
         'hide'             => 'Ausblenden',
@@ -528,7 +526,7 @@ $strings = [
         'no_channels'      => 'Keine klassifizierten Einstiege in diesem Zeitraum',
         'no_lang'          => 'Keine Daten in diesem Zeitraum',
         'no_geo'           => 'Geo deaktiviert oder keine Daten',
-        'no_sessions'      => 'Keine Sitzungen in diesem Zeitraum',
+        'no_sessions'      => 'Keine Besuche in diesem Zeitraum',
         'device_desktop'   => 'Desktop',
         'device_mobile'    => 'Mobil',
         'device_tablet'    => 'Tablet',
@@ -543,16 +541,16 @@ $strings = [
         'clear_btn'        => 'Alle Daten löschen',
         'confirm_msg'      => 'Alle %s Einträge endgültig löschen?',
         'confirm_btn'      => 'Ja, alles löschen',
-        'tip_pages'        => 'Änderung gegenüber der Vorperiode. Ein Klick auf eine Zeile filtert danach.',
-        'tip_referrers'    => 'Websites, von denen Besucher kamen. Gezählt pro Einstieg, nicht pro Person.',
-        'tip_entry'        => 'Seiten, auf denen Besucher von einer anderen Website ankamen.',
-        'tip_exit'         => 'Die letzte Seite jeder Sitzung. Der Prozentwert zeigt, wie viele Seitenaufrufe dieser Seite eine Sitzung beendet haben.',
-        'tip_depth'        => 'Sitzungen nach Anzahl der Seitenaufrufe.',
-        'tip_lang'         => 'Nach Besuchertagen. Unbekannte Werte sind ausgeschlossen.',
-        'tip_tod'          => 'Seitenaufrufe pro Stunde in der eingestellten Zeitzone.',
-        'tip_heatmap'      => 'Seitenaufrufe pro Wochentag und Stunde in der eingestellten Zeitzone.',
-        'tip_device'       => 'Nach Besuchertagen.',
-        'tip_countries'    => 'Nach Besuchertagen. Unbekannte Werte sind ausgeschlossen.',
+        'tip_pages'        => 'Ihre meistbesuchten Seiten und die Änderung zur Vorperiode.',
+        'tip_referrers'    => 'Websites, die Besucher zu Ihnen geschickt haben.',
+        'tip_entry'        => 'Seiten, auf denen Besucher von anderen Websites ankamen.',
+        'tip_exit'         => 'Seiten, auf denen Besuche endeten, mit ihrer Ausstiegsrate.',
+        'tip_depth'        => 'Wie viele Seiten Besuche umfassen.',
+        'tip_lang'         => 'Die Browsersprache Ihrer Besucher.',
+        'tip_tod'          => 'Wann Ihre Website besucht wird.',
+        'tip_heatmap'      => 'Wann Ihre Website im Wochenverlauf besucht wird.',
+        'tip_device'       => 'Geräte Ihrer Besucher.',
+        'tip_countries'    => 'Woher Ihre Besucher kommen.',
         'warn_default_pw'  => 'Die Anmeldung ist gesperrt, bis in pima-core.php ein eigenes Passwort als STATS_PASSWORD gesetzt ist. (Code T8)',
         'password_ph'      => 'Passwort',
         'login_help'       => 'Passwort vergessen? Ihre Website-Betreuung kann es zurücksetzen.',
@@ -1293,15 +1291,11 @@ $prev = $stats['prev'];
 $rate = function (array $p, string $part) { return $p['sessions'] > 0 ? $p[$part] / $p['sessions'] : null; };
 $kpis = [
     [
-        'label' => $t['kpi_views'],
-        'value' => dashboardNumber($cur['views'], $lang),
-        'tip'   => $t['tip_views'],
-        'pill'  => growthPill($cur['views'], $prev['views'], 'pct', false, $t, $arrowUp, $arrowDown),
-    ],
-    [
-        'label' => $hourly ? $t['kpi_visitors'] : $t['kpi_visitor_days'],
+        'label' => $t['kpi_visitors'],
         'value' => dashboardNumber($cur['visitors'], $lang),
-        'tip'   => $hourly ? $t['tip_daily_visitors'] : $t['tip_visitor_days'],
+        // Over several days the same person counts once per day.
+        'note'  => $hourly ? '' : $t['counted_daily'],
+        'tip'   => $t['tip_visitors'],
         'pill'  => growthPill($cur['visitors'], $prev['visitors'], 'pct', false, $t, $arrowUp, $arrowDown),
     ],
     [
@@ -1309,6 +1303,12 @@ $kpis = [
         'value' => dashboardNumber($cur['sessions'], $lang),
         'tip'   => $t['tip_sessions'],
         'pill'  => growthPill($cur['sessions'], $prev['sessions'], 'pct', false, $t, $arrowUp, $arrowDown),
+    ],
+    [
+        'label' => $t['kpi_views'],
+        'value' => dashboardNumber($cur['views'], $lang),
+        'tip'   => $t['tip_views'],
+        'pill'  => growthPill($cur['views'], $prev['views'], 'pct', false, $t, $arrowUp, $arrowDown),
     ],
     [
         'label' => $t['bounce_rate'],
@@ -1364,7 +1364,7 @@ $chartData = [
     'labels'   => $chartLabels,
     'cur'      => $chartCurValues,
     'prev'     => array_map('array_values', $chartPrev),
-    'names'    => ['views' => $t['kpi_views'], 'visitors' => $hourly ? $t['kpi_visitors'] : $t['kpi_visitor_days'], 'sessions' => $t['sessions']],
+    'names'    => ['views' => $t['kpi_views'], 'visitors' => $t['kpi_visitors'], 'sessions' => $t['sessions']],
     'curName'  => $rangeLabel,
     'prevName' => $t['prev_period'],
 ];
@@ -1514,13 +1514,14 @@ if ($isLocked) {
 
   .kpi-row { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:14px; margin:1rem 0 1.5rem; }
   @media (max-width:1100px) { .kpi-row { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
-  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:1.1rem 1.1rem 1rem; min-width:0; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:1.1rem 1.1rem 1rem; min-width:0; display:flex; flex-direction:column; }
   .kpi-label { display:flex; align-items:center; gap:.4rem; font-size:.65rem; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:.5rem; }
   .kpi-value { font-family:var(--font); font-size:1.75rem; font-weight:700; line-height:1.1; white-space:nowrap; }
 
   /* Delta pills */
-  .kpi-delta { display:flex; align-items:center; flex-wrap:wrap; gap:.2rem .4rem; margin-top:.55rem; }
+  .kpi-delta { display:flex; align-items:center; flex-wrap:wrap; gap:.2rem .4rem; margin-top:auto; padding-top:.55rem; }
   .kpi-cmp { font-size:.68rem; color:var(--muted); white-space:nowrap; }
+  .kpi-note { font-size:.72rem; color:var(--muted); margin-top:.25rem; }
   .pill { display:inline-flex; align-items:center; gap:.25rem; padding:.2rem .55rem; border-radius:20px; font-size:.7rem; font-weight:600; white-space:nowrap; }
   .pill.up   { background:var(--good-bg); color:var(--good-text); }
   .pill.down { background:var(--bad-bg); color:var(--bad-text); }
@@ -1858,6 +1859,7 @@ if ($isLocked) {
   <div class="kpi">
     <div class="kpi-label"><?= htmlspecialchars($kpi['label']) ?> <button type="button" class="info-btn" data-tip="<?= htmlspecialchars($kpi['tip']) ?>" aria-label="<?= htmlspecialchars($kpi['tip']) ?>">i</button></div>
     <div class="kpi-value"><?= $kpi['value'] ?></div>
+    <?php if (!empty($kpi['note'])): ?><div class="kpi-note"><?= htmlspecialchars($kpi['note']) ?></div><?php endif; ?>
     <?= $kpi['pill'] ?>
   </div>
   <?php endforeach; ?>
@@ -1867,8 +1869,8 @@ if ($isLocked) {
   <div class="card-head">
     <h2><?= $t['chart_title'] ?> <span class="card-window"><?= htmlspecialchars($rangeLabel) ?></span></h2><button type="button" class="info-btn" data-tip="<?= htmlspecialchars($t['tip_chart']) ?>" aria-label="<?= htmlspecialchars($t['tip_chart']) ?>">i</button>
     <span class="seg" role="group" aria-label="<?= htmlspecialchars($t['chart_metric']) ?>">
-      <?php foreach (['views', 'visitors', 'sessions'] as $i => $metric): ?>
-        <button type="button" data-metric="<?= $metric ?>" aria-pressed="<?= $i === 0 ? 'true' : 'false' ?>"><?= htmlspecialchars($chartData['names'][$metric]) ?></button>
+      <?php foreach (['visitors', 'sessions', 'views'] as $metric): ?>
+        <button type="button" data-metric="<?= $metric ?>" aria-pressed="<?= $metric === 'views' ? 'true' : 'false' ?>"><?= htmlspecialchars($chartData['names'][$metric]) ?></button>
       <?php endforeach; ?>
     </span>
   </div>
