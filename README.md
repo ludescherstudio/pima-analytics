@@ -305,11 +305,11 @@ define('LOCKOUT_SECONDS',    900);  // Lockout duration (900 = 15 minutes)
 
 From top to bottom:
 
-- **Period** — Today, yesterday, last 7, 30 or 90 days, this month or last month. Every panel follows the selected period; the default is the last 30 days
+- **Period** — Today, yesterday, last 7 days, last 30 days, last month or last 12 months. Every panel follows the selected period; the default is the last 30 days
 - **Filters** — Click a page, referrer, country, device or language in any list to narrow the whole dashboard to it. Active filters appear as chips that remove them again
 - **Summary** — Pageviews in the period and the daily average
 - **Key figures** — Visitors, visits and pageviews, then bounce rate, pages per visit and visit duration, each compared with the previous period. For periods longer than a day, visitors are marked "counted daily"
-- **Trend** — Line chart of visitors, visits or pageviews with the previous period as a dashed line; a single day is shown by hour
+- **Trend** — Line chart of visitors, visits or pageviews with the previous period as a dashed line; a single day is shown by hour, the last 12 months by week
 - **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
 - **Device type** — Desktop / Mobile / Tablet, visitors counted daily
 - **Time of day** — Pageviews by hour in the configured `TIMEZONE`
@@ -327,10 +327,17 @@ From top to bottom:
 - **CSV export** — Download all your data anytime
 - **Change password** — Users change their own password; see Step 2
 
-Rolling periods end today: "last 30 days" always means the 30 days up to and
-including today, compared with the 30 days before. "This month" is compared
-with the same days of the previous month, so a few days are never set against
-a full month.
+Periods roll rather than follow the calendar: "last 30 days" always means the
+30 days up to and including today, compared with the 30 days before. An open
+calendar unit such as "this month" or "this year" would drop to near zero on
+the 1st or on 1 January, so pima does not offer one. "Last month" is the
+completed previous calendar month, compared with the month before it.
+
+A comparison is only shown when pima has data for the whole previous period.
+Right after installing, and for "Last 12 months" while `DATA_RETENTION_DAYS`
+keeps less than two years, the key figures say "no comparison yet" instead of
+showing a growth that only reflects missing data. In the trend, days or weeks
+before the first recorded pageview are left blank rather than drawn as zero.
 
 How the three main figures relate: **visitors** are people, **visits** are the
 times they came, **pageviews** are the pages they opened. A visit is a run of
@@ -470,7 +477,9 @@ Settings added in a later release take their default automatically, so an update
 
 ### To 0.6.1
 
-- **Plainer wording, nothing else.** "Sessions" are now "visits", "visitor-days" are "visitors" marked "counted daily", and the key figures start with visitors, visits and pageviews. Tooltips say what a figure means. `$PIMA_STRINGS` keys `kpi_visitor_days`, `tip_daily_visitors` and `tip_visitor_days` were replaced by `counted_daily` and `tip_visitors`.
+- **Plainer wording.** "Sessions" are now "visits", "visitor-days" are "visitors" marked "counted daily", and the key figures start with visitors, visits and pageviews. Tooltips say what a figure means. `$PIMA_STRINGS` keys `kpi_visitor_days`, `tip_daily_visitors` and `tip_visitor_days` were replaced by `counted_daily` and `tip_visitors`.
+- **Periods are rolling throughout.** "Last 12 months" replaces "Last 90 days" and is charted by week; "This month" is gone, because it started from zero on every 1st. Bookmarks with `?range=90d` or `?range=month` fall back to the last 30 days.
+- **No comparison without data.** When the previous period starts before the first recorded pageview, the key figures say "no comparison yet" instead of a misleading growth.
 
 ### To 0.6
 
@@ -550,7 +559,7 @@ Geo caching or request/login limits; pima recreates them automatically.
 
 - **Estimated daily visitors only** — pima Analytics derives a daily anonymous identifier from a coarsened IP, the User-Agent and a rotating salt. Shared networks can merge visitors and browser changes can split them, so this is an estimate rather than a person count. The identifier cannot be correlated across days; for periods longer than a day the dashboard therefore marks visitors as "counted daily". Returning visitors and an all-time visitor count are deliberately not shown.
 - **Visits end at midnight** — because the identifier changes every night. Visit duration runs from the first to the last pageview, so time on the last page is not measured and single-page visits count as 0 seconds. A reload counts as a second pageview.
-- **Long periods on busy sites** — visits are worked out when the dashboard loads, from every pageview of the period and the one before. On a site with very many pageviews, "Last 90 days" takes noticeably longer than the shorter periods.
+- **Long periods on busy sites** — visits are worked out when the dashboard loads, from every pageview of the period and the one before. On a site with very many pageviews, "Last 12 months" takes noticeably longer than the shorter periods.
 - **Entry-based acquisition** — traffic channels classify page entries, not people. Internal navigation is excluded. Browser reloads can create another entry.
 - **Legacy channel data** — after upgrading, old external referrers remain usable. Old empty referrers cannot be distinguished from internal navigation and are therefore excluded instead of being guessed as direct traffic.
 - **Not for high-traffic sites** — SQLite handles millions of rows comfortably, but concurrent write spikes (500+ simultaneous visitors) may cause brief delays.

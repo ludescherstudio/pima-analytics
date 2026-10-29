@@ -308,19 +308,19 @@ $strings = [
         'range_yesterday'  => 'Yesterday',
         'range_7d'         => 'Last 7 days',
         'range_30d'        => 'Last 30 days',
-        'range_90d'        => 'Last 90 days',
-        'range_month'      => 'This month',
         'range_last_month' => 'Last month',
+        'range_12m'        => 'Last 12 months',
         'phrase_today'      => 'today',
         'phrase_yesterday'  => 'yesterday',
         'phrase_7d'         => 'in the last 7 days',
         'phrase_30d'        => 'in the last 30 days',
-        'phrase_90d'        => 'in the last 90 days',
-        'phrase_month'      => 'this month',
         'phrase_last_month' => 'last month',
+        'phrase_12m'        => 'in the last 12 months',
         'vs_prev'          => 'vs. previous period',
         'pp'               => 'pp',
         'prev_period'      => 'Previous period',
+        'no_prev'          => 'no comparison yet',
+        'week_of'          => 'Week of %s',
         'filter_label'     => 'Filtered by',
         'filter_by'        => 'Filter by',
         'filter_remove'    => 'Remove filter',
@@ -448,19 +448,19 @@ $strings = [
         'range_yesterday'  => 'Gestern',
         'range_7d'         => 'Letzte 7 Tage',
         'range_30d'        => 'Letzte 30 Tage',
-        'range_90d'        => 'Letzte 90 Tage',
-        'range_month'      => 'Dieser Monat',
         'range_last_month' => 'Letzter Monat',
+        'range_12m'        => 'Letzte 12 Monate',
         'phrase_today'      => 'heute',
         'phrase_yesterday'  => 'gestern',
         'phrase_7d'         => 'in den letzten 7 Tagen',
         'phrase_30d'        => 'in den letzten 30 Tagen',
-        'phrase_90d'        => 'in den letzten 90 Tagen',
-        'phrase_month'      => 'diesen Monat',
         'phrase_last_month' => 'letzten Monat',
+        'phrase_12m'        => 'in den letzten 12 Monaten',
         'vs_prev'          => 'vs. Vorperiode',
         'pp'               => 'PP',
         'prev_period'      => 'Vorperiode',
+        'no_prev'          => 'noch kein Vergleich',
+        'week_of'          => 'Woche ab %s',
         'filter_label'     => 'Gefiltert nach',
         'filter_by'        => 'Filtern nach',
         'filter_remove'    => 'Filter entfernen',
@@ -717,10 +717,10 @@ if ($authed && $advancedMode && isset($_POST['clear_data']) && ($_POST['confirm_
 }
 
 // ---- Range and filters ----
-// Every panel follows one selected range and compares it with a previous
-// period of the same length. Rolling ranges end today; calendar months are
-// compared with the same days of the month before.
-$rangeIds = ['today', 'yesterday', '7d', '30d', '90d', 'month', 'last_month'];
+// Every panel follows one selected range and compares it with the period of
+// the same length before it. Ranges roll and end today, so nothing drops to
+// zero on a Monday or the 1st; only "last month" is a completed calendar month.
+$rangeIds = ['today', 'yesterday', '7d', '30d', 'last_month', '12m'];
 $range    = (isset($_GET['range']) && is_string($_GET['range']) && in_array($_GET['range'], $rangeIds, true))
     ? $_GET['range'] : '30d';
 
@@ -729,16 +729,15 @@ switch ($range) {
     case 'today':      $fromDay = $todayDay;                                 $toDay = $todayDay; break;
     case 'yesterday':  $fromDay = $todayDay->modify('-1 day');              $toDay = $fromDay;  break;
     case '7d':         $fromDay = $todayDay->modify('-6 days');             $toDay = $todayDay; break;
-    case '90d':        $fromDay = $todayDay->modify('-89 days');            $toDay = $todayDay; break;
-    case 'month':      $fromDay = $todayDay->modify('first day of this month'); $toDay = $todayDay; break;
     case 'last_month': $fromDay = $todayDay->modify('first day of last month');
                        $toDay   = $todayDay->modify('last day of last month'); break;
+    case '12m':        $fromDay = $todayDay->modify('-364 days');           $toDay = $todayDay; break;
     default:           $fromDay = $todayDay->modify('-29 days');            $toDay = $todayDay;
 }
 $rangeDays = (int) $fromDay->diff($toDay)->format('%a') + 1;
-if ($range === 'month' || $range === 'last_month') {
+if ($range === 'last_month') {
     $prevFromDay = $fromDay->modify('first day of last month');
-    $prevToDay   = min($prevFromDay->modify('+' . ($rangeDays - 1) . ' days'), $prevFromDay->modify('last day of this month'));
+    $prevToDay   = $fromDay->modify('-1 day');
 } else {
     $prevToDay   = $fromDay->modify('-1 day');
     $prevFromDay = $prevToDay->modify('-' . ($rangeDays - 1) . ' days');
@@ -748,6 +747,9 @@ $to       = $toDay->format('Y-m-d');
 $prevFrom = $prevFromDay->format('Y-m-d');
 $prevTo   = $prevToDay->format('Y-m-d');
 $hourly   = $rangeDays === 1;
+// Long periods are charted by week so the line stays readable.
+$bucketStep = $rangeDays > 62 ? 7 : 1;
+$hasPrev    = false;
 
 // Clicking a row in any ranked list narrows the whole dashboard to it.
 $filters = [];
@@ -810,6 +812,7 @@ $emptyPeriod = ['views' => 0, 'visitors' => 0, 'sessions' => 0, 'bounces' => 0, 
 $stats = [
     'total'         => 0,
     'covered_days'  => 1,
+    'first_date'    => '',
     'active_now'    => 0,
     'cur'           => $emptyPeriod,
     'prev'          => $emptyPeriod,
@@ -831,20 +834,31 @@ $stats = [
     'db_rows'       => 0,
 ];
 
-// Chart buckets: hours for a single day, dates otherwise.
+// Chart buckets: hours for a single day, otherwise days or weeks keyed by
+// their first date. Weeks are counted back from the last day, so the newest
+// week is complete and only the oldest may be short.
 $bucketKeys = [];
 $prevBucketKeys = [];
+$bucketShift     = $bucketStep > 1 ? ($bucketStep - $rangeDays % $bucketStep) % $bucketStep : 0;
+$bucketStart     = $fromDay->modify("-$bucketShift days");
+$prevBucketStart = $prevFromDay->modify("-$bucketShift days");
 if ($hourly) {
     for ($h = 0; $h < 24; $h++) {
         $bucketKeys[] = sprintf('%02d', $h);
         $prevBucketKeys[] = sprintf('%02d', $h);
     }
 } else {
-    for ($i = 0; $i < $rangeDays; $i++) {
-        $bucketKeys[] = $fromDay->modify("+$i days")->format('Y-m-d');
-        $prevBucketKeys[] = $prevFromDay->modify("+$i days")->format('Y-m-d');
+    for ($i = 0; $i < $rangeDays + $bucketShift; $i += $bucketStep) {
+        $bucketKeys[] = $bucketStart->modify("+$i days")->format('Y-m-d');
+        $prevBucketKeys[] = $prevBucketStart->modify("+$i days")->format('Y-m-d');
     }
 }
+$bucketOf = function (string $date, DateTimeImmutable $start) use ($bucketStep): string {
+    $day = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$day || $bucketStep === 1) return $date;
+    $offset = (int) $start->diff($day)->format('%r%a');
+    return $start->modify('+' . (intdiv($offset, $bucketStep) * $bucketStep) . ' days')->format('Y-m-d');
+};
 $emptySeries = ['views' => array_fill_keys($bucketKeys, 0), 'visitors' => array_fill_keys($bucketKeys, 0), 'sessions' => array_fill_keys($bucketKeys, 0)];
 $chartCur  = $emptySeries;
 $chartPrev = ['views' => array_fill_keys($prevBucketKeys, 0), 'visitors' => array_fill_keys($prevBucketKeys, 0), 'sessions' => array_fill_keys($prevBucketKeys, 0)];
@@ -877,6 +891,10 @@ if ($authed) {
             $b = DateTimeImmutable::createFromFormat('!Y-m-d', $coverTo);
             if ($a && $b && $a <= $b) $stats['covered_days'] = (int) $a->diff($b)->format('%a') + 1;
         }
+        // Before tracking began, or after old rows were pruned, the previous
+        // period would look emptier than it was.
+        $hasPrev = $firstDate !== '' && $prevFrom >= $firstDate;
+        $stats['first_date'] = $firstDate;
 
         // Visitors are visitor-days: the vid is only comparable within one day.
         foreach (['cur' => $inCur, 'prev' => $inPrev] as $period => $where) {
@@ -889,12 +907,13 @@ if ($authed) {
         foreach (['cur' => $inCur, 'prev' => $inPrev] as $period => $where) {
             $res = $db->query("SELECT $bucketExpr AS b, COUNT(*) AS views, COUNT(DISTINCT CASE WHEN vid != '' THEN date || vid END) AS visitors FROM hits WHERE $where $fw GROUP BY b");
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-                if ($period === 'cur' && isset($chartCur['views'][$row['b']])) {
-                    $chartCur['views'][$row['b']]    = (int) $row['views'];
-                    $chartCur['visitors'][$row['b']] = (int) $row['visitors'];
-                } elseif ($period === 'prev' && isset($chartPrev['views'][$row['b']])) {
-                    $chartPrev['views'][$row['b']]    = (int) $row['views'];
-                    $chartPrev['visitors'][$row['b']] = (int) $row['visitors'];
+                $b = $hourly ? $row['b'] : $bucketOf($row['b'], $period === 'cur' ? $bucketStart : $prevBucketStart);
+                if ($period === 'cur' && isset($chartCur['views'][$b])) {
+                    $chartCur['views'][$b]    += (int) $row['views'];
+                    $chartCur['visitors'][$b] += (int) $row['visitors'];
+                } elseif ($period === 'prev' && isset($chartPrev['views'][$b])) {
+                    $chartPrev['views'][$b]    += (int) $row['views'];
+                    $chartPrev['visitors'][$b] += (int) $row['visitors'];
                 }
             }
         }
@@ -1024,9 +1043,10 @@ if ($authed) {
         $recentLimit      = max(1, defined('RECENT_ENTRIES') ? (int) RECENT_ENTRIES : 50);
         $exitCounts       = [];
         $sessionPageViews = [];
-        $finishSession = function (?array $s) use (&$stats, &$exitCounts, &$sessionPageViews, &$chartCur, &$chartPrev, $from, $prevTo, $hourly, $recentLimit) {
+        $finishSession = function (?array $s) use (&$stats, &$exitCounts, &$sessionPageViews, &$chartCur, &$chartPrev, $from, $prevTo, $hourly, $recentLimit, $bucketOf, $bucketStart, $prevBucketStart) {
             if ($s === null || !$s['match']) return;
-            $bucket = $hourly ? sprintf('%02d', intdiv($s['first'], 3600)) : $s['date'];
+            $bucket = $hourly ? sprintf('%02d', intdiv($s['first'], 3600))
+                : $bucketOf($s['date'], $s['date'] < $from ? $prevBucketStart : $bucketStart);
             if ($s['date'] < $from) {
                 // A shortened previous month leaves a gap before the range.
                 if ($s['date'] > $prevTo) return;
@@ -1056,7 +1076,8 @@ if ($authed) {
                 $stats['recent'] = array_slice($stats['recent'], 0, $recentLimit);
             }
         };
-        $res = $db->query("SELECT date, vid, time, page, referrer, device, country, lang FROM hits WHERE vid != '' AND date >= '$prevFrom' AND date <= '$to' ORDER BY date, vid, time, id");
+        $walkFrom = $hasPrev ? $prevFrom : $from;
+        $res = $db->query("SELECT date, vid, time, page, referrer, device, country, lang FROM hits WHERE vid != '' AND date >= '$walkFrom' AND date <= '$to' ORDER BY date, vid, time, id");
         $session = null;
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $parts = explode(':', (string) $row['time']);
@@ -1334,6 +1355,12 @@ $kpis = [
     ],
 ];
 
+if (!$hasPrev) {
+    foreach ($kpis as $k => $kpi) {
+        $kpis[$k]['pill'] = '<div class="kpi-delta"><span class="kpi-cmp">' . htmlspecialchars($t['no_prev']) . '</span></div>';
+    }
+}
+
 // Chart data for the inline renderer.
 $chartLabels = [];
 foreach ($bucketKeys as $i => $key) {
@@ -1342,15 +1369,18 @@ foreach ($bucketKeys as $i => $key) {
         $chartLabels[] = ['tick' => $key . ':00', 'tip' => $tip, 'prevTip' => $tip];
         continue;
     }
-    $ts     = strtotime($key);
-    $prevTs = strtotime($prevBucketKeys[$i]);
+    $ts     = strtotime(max($key, $from));
+    $prevTs = strtotime(max($prevBucketKeys[$i], $prevFrom));
     $dayFmt = function (int $ts) use ($lang, $weekdaysShort): string {
         return $weekdaysShort[(int) date('w', $ts)] . ', ' . date('j', $ts) . ($lang === 'de' ? '. ' : ' ') . dashboardMonthShort($ts, $lang);
     };
+    $shortFmt = function (int $ts) use ($lang): string {
+        return date('j', $ts) . ($lang === 'de' ? '. ' : ' ') . dashboardMonthShort($ts, $lang);
+    };
     $chartLabels[] = [
-        'tick'    => date('j', $ts) . ($lang === 'de' ? '. ' : ' ') . dashboardMonthShort($ts, $lang),
-        'tip'     => $dayFmt($ts),
-        'prevTip' => $dayFmt($prevTs),
+        'tick'    => $shortFmt($ts),
+        'tip'     => $bucketStep === 1 ? $dayFmt($ts) : sprintf($t['week_of'], $shortFmt($ts)),
+        'prevTip' => $bucketStep === 1 ? $dayFmt($prevTs) : sprintf($t['week_of'], $shortFmt($prevTs)),
     ];
 }
 $chartCurValues = array_map('array_values', $chartCur);
@@ -1360,10 +1390,19 @@ if ($range === 'today') {
         for ($h = (int) date('G') + 1; $h < 24; $h++) $chartCurValues[$metric][$h] = null;
     }
 }
+if (!$hourly && $stats['first_date'] !== '') {
+    // Days or weeks that began before tracking did are incomplete, not low.
+    // The newest one always stays, so a fresh install still shows a point.
+    $lastBucket = count($bucketKeys) - 1;
+    foreach ($bucketKeys as $i => $key) {
+        if ($key >= $stats['first_date'] || $i === $lastBucket) break;
+        foreach ($chartCurValues as $metric => $values) $chartCurValues[$metric][$i] = null;
+    }
+}
 $chartData = [
     'labels'   => $chartLabels,
     'cur'      => $chartCurValues,
-    'prev'     => array_map('array_values', $chartPrev),
+    'prev'     => $hasPrev ? array_map('array_values', $chartPrev) : ['views' => [], 'visitors' => [], 'sessions' => []],
     'names'    => ['views' => $t['kpi_views'], 'visitors' => $t['kpi_visitors'], 'sessions' => $t['sessions']],
     'curName'  => $rangeLabel,
     'prevName' => $t['prev_period'],
@@ -1877,7 +1916,7 @@ if ($isLocked) {
   <div id="chart" class="chart" data-metric="views" role="img" aria-label="<?= htmlspecialchars(sprintf($t['chart_aria'], $rangeLabel)) ?>"></div>
   <div class="legend">
     <span><i></i><?= htmlspecialchars($rangeLabel) ?></span>
-    <span><i class="key-prev"></i><?= htmlspecialchars($t['prev_period']) ?></span>
+    <?php if ($hasPrev): ?><span><i class="key-prev"></i><?= htmlspecialchars($t['prev_period']) ?></span><?php endif; ?>
   </div>
   <script type="application/json" id="chart-data"><?= json_encode($chartData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?></script>
 </div>
@@ -1955,6 +1994,7 @@ if ($isLocked) {
         $diff   = $c - $prevC;
         $dClass = $diff > 0 ? 'up' : ($diff < 0 ? 'down' : 'same');
         $dLabel = $diff > 0 ? '+' . $diff : ($diff < 0 ? (string)$diff : '—');
+        if (!$hasPrev) { $dClass = 'same'; $dLabel = '—'; }
       ?>
         <li>
           <span class="rank-n"><?= $i++ ?></span>
@@ -2333,13 +2373,15 @@ if ($isLocked) {
   function render() {
     var metric = box.getAttribute('data-metric');
     var cur = data.cur[metric], prev = data.prev[metric];
+    var hasPrev = prev.length > 0;
     var n = cur.length;
     var W = box.clientWidth, H = box.clientHeight;
     var padL = 34, padR = 10, padT = 10, padB = 24;
     var known = function(v) { return v !== null; };
     var max = niceMax(Math.max.apply(null, cur.filter(known).concat(prev, [0])));
-    var last = cur.length - 1;
-    while (last > 0 && cur[last] === null) last--;
+    var first = 0, last = cur.length - 1;
+    while (first < last && cur[first] === null) first++;
+    while (last > first && cur[last] === null) last--;
     var x = function(i) { return padL + (n === 1 ? (W - padL - padR) / 2 : i * (W - padL - padR) / (n - 1)); };
     var y = function(v) { return padT + (1 - v / max) * (H - padT - padB); };
 
@@ -2361,11 +2403,12 @@ if ($isLocked) {
     }
 
     var path = function(series) {
-      return series.slice(0, series === cur ? last + 1 : series.length)
-        .map(function(v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ');
+      var from = series === cur ? first : 0, to = series === cur ? last : series.length - 1, d = [];
+      for (var i = from; i <= to; i++) d.push((i === from ? 'M' : 'L') + x(i).toFixed(1) + ' ' + y(series[i]).toFixed(1));
+      return d.join(' ');
     };
     el('path', { d: path(prev), 'class': 'line-prev' }, svg);
-    el('path', { d: path(cur) + ' L' + x(last).toFixed(1) + ' ' + y(0) + ' L' + x(0).toFixed(1) + ' ' + y(0) + ' Z', 'class': 'area-cur' }, svg);
+    el('path', { d: path(cur) + ' L' + x(last).toFixed(1) + ' ' + y(0) + ' L' + x(first).toFixed(1) + ' ' + y(0) + ' Z', 'class': 'area-cur' }, svg);
     el('path', { d: path(cur), 'class': 'line-cur' }, svg);
 
     var cursor = el('line', { y1: padT, y2: H - padB, 'class': 'cursor', visibility: 'hidden' }, svg);
@@ -2385,6 +2428,7 @@ if ($isLocked) {
       dotCur.setAttribute('cx', cx); dotCur.setAttribute('cy', y(cur[i] === null ? 0 : cur[i]));
       dotPrev.setAttribute('cx', cx); dotPrev.setAttribute('cy', y(prev[i]));
       [cursor, dotCur, dotPrev].forEach(function(node) { node.setAttribute('visibility', 'visible'); });
+      if (!hasPrev) dotPrev.setAttribute('visibility', 'hidden');
       if (cur[i] === null) dotCur.setAttribute('visibility', 'hidden');
       tipBox.textContent = '';
       var head = document.createElement('div');
@@ -2394,7 +2438,7 @@ if ($isLocked) {
       sub.className = 'muted-line';
       sub.textContent = data.prevName + ' (' + data.labels[i].prevTip + '): ' + fmt(prev[i]);
       tipBox.appendChild(head);
-      tipBox.appendChild(sub);
+      if (hasPrev) tipBox.appendChild(sub);
       tipBox.style.display = 'block';
       var left = cx + 12;
       if (left + tipBox.offsetWidth > W) left = cx - tipBox.offsetWidth - 12;
