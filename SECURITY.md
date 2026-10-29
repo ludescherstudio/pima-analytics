@@ -23,6 +23,8 @@ alongside client work — timelines are best-effort, not contractual.
 
 - Bypassing the dashboard login, its CSRF protection, or its per-IP lockout
 - Changing the dashboard password without knowing the current one
+- Keeping an unattended dashboard session alive past its idle timeout, for
+  example through the once-a-minute "active now" request
 - Reading `analytics.db` — or any `pima-cache/` file — over HTTP on a server
   that has the documented `.htaccess` in place
 - SQL injection through any tracker parameter (`p`, `r`, `title`) or through

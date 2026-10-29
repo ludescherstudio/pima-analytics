@@ -278,7 +278,8 @@ self-hosted dashboard on shared hosting.
 - `pima-cache/` is fully blocked — the SQLite database cannot be downloaded directly
 - The login form has **brute-force protection**: after 5 failed attempts, the form locks out for 15 minutes (configurable in `pima-core.php`)
 - Concurrent login attempts share one atomic counter; expired lockouts reset cleanly
-- Dashboard sessions use their own cookie (`pima_session`), so other PHP apps on the same domain cannot sign users out; they use strict cookie mode, regenerate after login and expire after inactivity (30 minutes), after a maximum lifetime (12 hours) or when the password changes
+- Dashboard sessions use their own cookie (`pima_session`), so other PHP apps on the same domain cannot sign users out; they use strict cookie mode, regenerate after login and expire after inactivity (30 minutes), after a maximum lifetime (12 hours) or when the password changes. The once-a-minute "active now" update does not count as activity, so an open but unattended dashboard still times out
+- The period from the address bar is checked against a fixed list, country, device and language filters against fixed values or patterns; page and referrer filters reach SQLite only as escaped literals
 - The shipped default password and an empty password lock sign-in instead of only warning
 - Changing the password in the dashboard requires the current one, counts wrong attempts towards the same lockout as the login and signs out every other session. The new password is stored only as a `password_hash()` in `pima-cache/.pima-password` (mode 0600, blocked with the rest of `pima-cache/`)
 - All inputs to `pima-tracker.php` are safely bound using SQLite3 prepared statements to prevent SQL injection
@@ -299,37 +300,48 @@ define('LOCKOUT_SECONDS',    900);  // Lockout duration (900 = 15 minutes)
 ## Dashboard
 
 <p align="center">
-  <img src="assets/screenshot_1.webp" width="760" alt="pima Analytics dashboard with trend, traffic channels, devices, time of day, top pages and entry pages">
+  <img src="assets/screenshot_1.webp" width="760" alt="pima Analytics dashboard with period picker, key figures, trend chart, traffic channels, devices and time of day">
 </p>
 
 From top to bottom:
 
-- **Summary** — Pageviews over the last 30 days and the daily average
-- **KPIs** — Total pageviews and today, plus rolling 7- and 30-day totals with an
-  absolute delta against the preceding window of the same length
-- **14-day trend** — Daily pageviews and estimated visitors as a bar chart
+- **Period** — Today, yesterday, last 7, 30 or 90 days, this month or last month. Every panel follows the selected period; the default is the last 30 days
+- **Filters** — Click a page, referrer, country, device or language in any list to narrow the whole dashboard to it. Active filters appear as chips that remove them again
+- **Summary** — Pageviews in the period and the daily average
+- **Key figures** — Pageviews, visitors (visitor-days for periods longer than a day), sessions, bounce rate, pages per session and session duration, each compared with the previous period
+- **Trend** — Line chart of pageviews, visitors or sessions with the previous period as a dashed line; a single day is shown by hour
 - **Traffic channels** — Direct, search, social and referral entries; internal navigation is excluded
 - **Device type** — Desktop / Mobile / Tablet by visitor-day
 - **Time of day** — Pageviews by hour in the configured `TIMEZONE`
-- **Top pages** — Ranked by page title, with the change against the previous 30 days
+- **Top pages** — Ranked by page title, with the change against the previous period
 - **Entry pages** — Pages opened with an external referrer
+- **Exit pages** — The last page of each session, with its exit rate
+- **Session depth** — Sessions by number of pageviews
+- **Weekday and hour** — Heatmap of pageviews, for periods of 7 days or more
 - **Referrers** — External hosts that generated entries
 - **Countries** — Detected countries by visitor-day
 - **Browser language** — Language distribution by visitor-day
-- **Latest pageviews** — The last 50 pageviews (collapsed by default)
+- **Latest sessions** — Source, page path and duration of the newest sessions (collapsed by default)
+- **Active now** — Visitors of the last 5 minutes in the header, updated every minute
+- **Dark mode** — Follows the system setting; the moon button switches it, and the browser remembers the choice
 - **CSV export** — Download all your data anytime
 - **Change password** — Users change their own password; see Step 2
 
-All windowed panels roll rather than following the calendar: "last 30 days"
-always means the 30 days up to and including today. A calendar month would
-drop every one of these panels to near zero at midnight on the 1st, which on a
-low-traffic site makes the first week of each month unreadable — and it would
-make the deltas compare windows of different lengths.
+Rolling periods end today: "last 30 days" always means the 30 days up to and
+including today, compared with the 30 days before. "This month" is compared
+with the same days of the previous month, so a few days are never set against
+a full month.
+
+A session is a run of pageviews with the same daily visitor identifier and no
+gap longer than 30 minutes. Sessions are worked out when the dashboard loads;
+the tracker stores nothing extra for them. With a filter, session figures count
+the sessions that contain at least one matching pageview, and a referrer filter
+keeps every pageview of the visitor-days that arrived from that referrer.
 
 The dashboard works on phones as well:
 
 <p align="center">
-  <img src="assets/screenshot_2.webp" width="260" alt="pima Analytics dashboard on a phone">
+  <img src="assets/screenshot_2.webp" width="260" alt="pima Analytics dashboard on a phone in dark mode">
 </p>
 
 ### Error codes
@@ -406,8 +418,7 @@ define('SESSION_IDLE_SECONDS',1800);                                 // Dashboar
 define('SESSION_MAX_SECONDS', 43200);                                // Sign in again after 12 hours at the latest
 define('TRACKER_RATE_LIMIT', 120);                                   // Hits per IP bucket/window
 define('TRACKER_RATE_WINDOW',60);                                    // Rate window in seconds
-define('RECENT_ENTRIES',     50);                                    // Entries in the latest-pageviews list
-define('TREND_DAYS',         14);                                    // Days shown in trend chart
+define('RECENT_ENTRIES',     50);                                    // Sessions in the latest-sessions list
 define('ADVANCED_MODE',      false);                                 // Enable danger zone in dashboard
 
 // Optional: override single dashboard strings — see Language
@@ -451,6 +462,14 @@ Disable again by setting it back to `false`.
 An update replaces exactly two files: **`pima.php` and `pima-tracker.php`**. Upload both from the same release. `pima-core.php` (your settings, your `$PIMA_STRINGS`) and `pima-cache/` (your data) are never part of an update, and the tracking snippet stays as it is.
 
 Settings added in a later release take their default automatically, so an update never requires editing `pima-core.php`. The version you run is shown in the dashboard footer.
+
+### To 0.6
+
+- **No action needed.** The tracker adds one database index on its next pageview; nothing else changes on disk.
+- **The dashboard follows a selected period** instead of fixed 7- and 30-day tiles, and adds sessions, filters, a trend chart, exit pages, a weekday heatmap, latest sessions, "active now" and dark mode.
+- **`TREND_DAYS` is no longer used.** It can stay in `pima-core.php`; the trend now covers the selected period.
+- **`RECENT_ENTRIES`** now sets how many sessions the latest-sessions list shows.
+- **`$PIMA_STRINGS`**: the keys of the removed tiles and of the latest-pageviews table no longer exist and are ignored. The full list of keys is in `$strings` in `pima.php`.
 
 ### To 0.5 (from any earlier copy)
 
@@ -520,11 +539,13 @@ Geo caching or request/login limits; pima recreates them automatically.
 
 ## Honest limitations
 
-- **Estimated daily visitors only** — pima Analytics derives a daily anonymous identifier from a coarsened IP, the User-Agent and a rotating salt. Shared networks can merge visitors and browser changes can split them, so this is an estimate rather than a person count. The identifier cannot be correlated across days; 7- and 30-day figures are therefore explicitly labelled visitor-days. An all-time visitor count is deliberately not shown.
+- **Estimated daily visitors only** — pima Analytics derives a daily anonymous identifier from a coarsened IP, the User-Agent and a rotating salt. Shared networks can merge visitors and browser changes can split them, so this is an estimate rather than a person count. The identifier cannot be correlated across days; figures for periods longer than a day are therefore explicitly labelled visitor-days. Returning visitors and an all-time visitor count are deliberately not shown.
+- **Sessions end at midnight** — because the identifier changes every night. Session duration runs from the first to the last pageview, so time on the last page is not measured and single-page sessions count as 0 seconds. A reload counts as a second pageview.
+- **Long periods on busy sites** — sessions are worked out when the dashboard loads, from every pageview of the period and the one before. On a site with very many pageviews, "Last 90 days" takes noticeably longer than the shorter periods.
 - **Entry-based acquisition** — traffic channels classify page entries, not people. Internal navigation is excluded. Browser reloads can create another entry.
 - **Legacy channel data** — after upgrading, old external referrers remain usable. Old empty referrers cannot be distinguished from internal navigation and are therefore excluded instead of being guessed as direct traffic.
 - **Not for high-traffic sites** — SQLite handles millions of rows comfortably, but concurrent write spikes (500+ simultaneous visitors) may cause brief delays.
-- **No real-time view** — dashboard reflects data as written to the database.
+- **Near real time only** — "Active now" counts visitors of the last 5 minutes and refreshes every minute; there is no live event stream.
 
 ---
 

@@ -69,7 +69,7 @@ The generated plaintext dashboard password and `TRACKER_TOKEN` **must be reporte
 
 Leave `STATS_PASSWORD_CHANGE` at `true` unless the integrator explicitly wants to keep sole control of the password.
 
-Do not touch `DB_PATH`, `GEO_ENABLED`, `EXCLUDED_IPS`, `BOT_PATTERNS`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_SECONDS`, `SESSION_IDLE_SECONDS`, `SESSION_MAX_SECONDS`, `RECENT_ENTRIES`, `TREND_DAYS`, or `ADVANCED_MODE` — their defaults are correct.
+Do not touch `DB_PATH`, `GEO_ENABLED`, `EXCLUDED_IPS`, `BOT_PATTERNS`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_SECONDS`, `SESSION_IDLE_SECONDS`, `SESSION_MAX_SECONDS`, `RECENT_ENTRIES`, or `ADVANCED_MODE` — their defaults are correct.
 
 ### Step 3 — Find the footer file
 
