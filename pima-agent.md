@@ -64,6 +64,7 @@ Open `pima-core.php` and update the relevant `define()` calls. Do **not** rewrit
 5. **`BRAND_NAME`** — the client/project name.
 6. **`BRAND_COLOR`** — try to match the site's primary color by scanning the main CSS file for a dominant `--primary`, `--accent`, or hex value used in headings / buttons. If unclear, leave the default `#0d9488`.
 7. **`BRAND_LOGO`** — if the site has a logo at a predictable path (e.g. `/assets/logo.svg`, `/img/logo.png`), set it. Otherwise leave empty — the dashboard falls back to `BRAND_NAME` as text.
+8. **`BRAND_LOGO_DARK`** — only if the site also has a light or white version of that logo (e.g. `/assets/logo-white.svg`, often used in a dark footer), set it. Otherwise leave empty — dark mode then shows `BRAND_LOGO` on a white plate.
 
 The generated plaintext dashboard password and `TRACKER_TOKEN` **must be reported verbatim in the final summary** so the user can save them. The password is not recoverable from its hash after install. The client can change it under *Change password* in the dashboard; it is then stored in `pima-cache/.pima-password`, which takes precedence over `STATS_PASSWORD`. Deleting that file resets to `pima-core.php`. The shipped `change-me-please` locks sign-in.
 
@@ -289,6 +290,7 @@ define('TIMEZONE',       'Europe/Vienna');
 define('LANG',           'en');
 define('BRAND_COLOR',    '#0d9488');
 define('BRAND_LOGO',     '');
+define('BRAND_LOGO_DARK', '');
 define('BRAND_NAME',     'My Website');
 ```
 
@@ -317,6 +319,7 @@ define('TIMEZONE',       'Europe/Vienna');
 define('LANG',           'de');
 define('BRAND_COLOR',    '#2c5282');
 define('BRAND_LOGO',     '/assets/logo.svg');
+define('BRAND_LOGO_DARK', '');
 define('BRAND_NAME',     'Dr. Müller');
 ```
 

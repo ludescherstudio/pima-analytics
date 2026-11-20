@@ -226,6 +226,7 @@ Open `pima-core.php` and adapt the dashboard to match your site:
 // --- Branding ---
 define('BRAND_COLOR', '#0d9488'); // any hex color, e.g. '#c0392b' for red
 define('BRAND_LOGO',  '');        // same-origin path or URL to your logo
+define('BRAND_LOGO_DARK', '');   // optional: a light version for dark mode
 define('BRAND_NAME',  'My Website'); // change this to your site name
 ```
 
@@ -242,6 +243,17 @@ define('BRAND_LOGO', 'https://yourdomain.com/assets/logo.png');
 Supported formats: SVG, PNG, JPG, WebP. For security, the dashboard's Content
 Security Policy blocks images hosted on other domains. The logo appears centered
 above the summary sentence. Leave empty to show `BRAND_NAME` as text instead.
+
+**Logo in dark mode:** the login screen and the dashboard follow the light or
+dark setting of the device, and the moon button switches it. One logo is
+enough: in dark mode pima shows it on a small white plate, so a dark logo stays
+readable. If you have a light version of your logo, set it as well and pima
+swaps the two instead:
+
+```php
+define('BRAND_LOGO',      '/assets/logo.svg');
+define('BRAND_LOGO_DARK', '/assets/logo-white.svg');
+```
 
 ---
 
@@ -419,6 +431,7 @@ define('LANG',               'en');                                  // 'en' (de
 define('BRAND_COLOR',        '#0d9488');                             // Any CSS hex color
 define('BRAND_NAME',         'My Website');                               // Shown on the login screen, in the dashboard and the browser tab
 define('BRAND_LOGO',         '');                                    // Path to self-hosted logo image
+define('BRAND_LOGO_DARK',    '');                                    // Optional light logo for dark mode
 define('DB_PATH',            __DIR__.'/pima-cache/analytics.db');    // SQLite database location
 define('GEO_ENABLED',        true);                                  // HTTPS country lookup of the truncated IP via IPWhois.io
 define('DATA_RETENTION_DAYS',365);                                   // 0 keeps rows forever
@@ -475,6 +488,10 @@ Disable again by setting it back to `false`.
 An update replaces exactly two files: **`pima.php` and `pima-tracker.php`**. Upload both from the same release. `pima-core.php` (your settings, your `$PIMA_STRINGS`) and `pima-cache/` (your data) are never part of an update, and the tracking snippet stays as it is.
 
 Settings added in a later release take their default automatically, so an update never requires editing `pima-core.php`. The version you run is shown in the dashboard footer.
+
+### To 0.6.3
+
+- **Logos stay visible in dark mode.** A single `BRAND_LOGO` is shown on a white plate in dark mode. The optional `BRAND_LOGO_DARK` swaps in a light version instead. Existing installs need no change; add `BRAND_LOGO_DARK` to `pima-core.php` only if you want it.
 
 ### To 0.6.2
 

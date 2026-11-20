@@ -26,6 +26,7 @@ define('LANG', 'en');
 // --- Branding ---
 define('BRAND_COLOR',    '#0d9488');          // any hex color
 define('BRAND_LOGO',     '');                // e.g. '/assets/logo.svg'
+define('BRAND_LOGO_DARK', '');               // optional light version for dark mode, e.g. '/assets/logo-white.svg'
 define('BRAND_NAME',     'My Website');      // your site name: login screen and dashboard
 
 // --- Database ---

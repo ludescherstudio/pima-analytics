@@ -4,7 +4,7 @@
  * URL: example.com/pima
  */
 
-define('PIMA_VERSION', '0.6.2');
+define('PIMA_VERSION', '0.6.3');
 
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
@@ -280,6 +280,17 @@ if (preg_match('/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i', $brandColor, $m)) {
     $brandColor = '#' . $m[1].$m[1].$m[2].$m[2].$m[3].$m[3];
 }
 $brandLogo    = defined('BRAND_LOGO')     ? BRAND_LOGO     : '';
+$brandLogoDark = defined('BRAND_LOGO_DARK') ? BRAND_LOGO_DARK : '';
+
+// The site logo for both themes: with a dark-mode version the two swap;
+// with one logo only, dark mode puts it on a light plate so it stays visible.
+function brandLogoHtml(string $logo, string $logoDark, string $alt, string $class): string {
+    $img = function (string $src, string $classes, string $altText): string {
+        return '<img class="' . $classes . '" src="' . htmlspecialchars($src) . '" alt="' . htmlspecialchars($altText) . '">';
+    };
+    if ($logoDark === '') return $img($logo, 'logo-plate ' . $class, $alt);
+    return $img($logo, 'logo-light ' . $class, $alt) . $img($logoDark, 'logo-dark ' . $class, '');
+}
 $brandName    = defined('BRAND_NAME')     ? BRAND_NAME     : 'pima';
 $brandFont    = 'system-ui, -apple-system, sans-serif';
 $advancedMode = defined('ADVANCED_MODE')  ? ADVANCED_MODE  : false;
@@ -1498,6 +1509,11 @@ if ($isLocked) {
   }
   :root[data-theme="dark"] .logo-dark { display:block !important; }
   :root[data-theme="dark"] .logo-light { display:none !important; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .logo-plate { background:#ffffff; padding:.45rem .75rem; border-radius:8px; box-sizing:content-box; }
+  }
+  :root[data-theme="dark"] .logo-plate { background:#ffffff; padding:.45rem .75rem; border-radius:8px; box-sizing:content-box; }
+  .login-logo { height:42px; width:auto; display:block; margin-bottom:.15rem; }
 
   @keyframes login-up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
@@ -1536,7 +1552,8 @@ if ($isLocked) {
   @keyframes live-pulse { 0% { box-shadow:0 0 0 0 rgba(61,220,132,.55); } 70% { box-shadow:0 0 0 7px rgba(61,220,132,0); } 100% { box-shadow:0 0 0 0 rgba(61,220,132,0); } }
 
   .site-name { text-align:center; font-family:var(--font); font-size:1.15rem; font-weight:600; color:var(--text); padding:.5rem 0 0; }
-  .site-name img { max-height:80px; max-width:320px; }
+  .site-name img { display:block; margin:0 auto; max-height:80px; max-width:320px; }
+  .site-name + .card { margin-top:1.25rem; }
 
   .range-bar { display:flex; gap:.35rem; overflow-x:auto; padding:.15rem .1rem .35rem; margin-top:1.25rem; scrollbar-width:thin; }
   .range-bar a { flex-shrink:0; font-size:.8rem; color:var(--muted); text-decoration:none; padding:.4rem .8rem; border-radius:20px; border:1px solid var(--border); background:var(--surface); transition:border-color .15s, color .15s; }
@@ -1758,10 +1775,10 @@ if ($isLocked) {
   <div class="login-box">
     <h1 class="login-title">
     <?php if ($brandLogo): ?>
-      <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
+      <?= brandLogoHtml($brandLogo, $brandLogoDark, $brandName, 'login-logo') ?>
     <?php else: ?>
-      <img class="logo-light" src="<?= $pimaLogoLight ?>" alt="pima Analytics" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
-      <img class="logo-dark" src="<?= $pimaLogoDark ?>" alt="" style="height:42px;width:auto;display:block;margin-bottom:.15rem;">
+      <img class="logo-light login-logo" src="<?= $pimaLogoLight ?>" alt="pima Analytics">
+      <img class="logo-dark login-logo" src="<?= $pimaLogoDark ?>" alt="">
     <?php endif; ?>
     </h1>
     <p class="sub"><?= htmlspecialchars($brandName) ?></p>
@@ -1821,7 +1838,7 @@ if ($isLocked) {
 
 <h1 class="site-name">
   <?php if ($brandLogo): ?>
-    <img src="<?= htmlspecialchars($brandLogo) ?>" alt="<?= htmlspecialchars($brandName) ?>">
+    <?= brandLogoHtml($brandLogo, $brandLogoDark, $brandName, '') ?>
   <?php else: ?>
     <?= htmlspecialchars($brandName) ?>
   <?php endif; ?>
