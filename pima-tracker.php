@@ -22,6 +22,10 @@ if (defined('TRACKER_TOKEN') && TRACKER_TOKEN !== '') {
     if (!is_string($providedToken) || !hash_equals((string) TRACKER_TOKEN, $providedToken)) exit;
 }
 
+// Without the SQLite3 extension nothing can be stored; the dashboard reports
+// it as T19. The pixel is already out, so stop before any further work.
+if (!class_exists('SQLite3')) exit;
+
 // ---- Helpers ----
 
 function isBot(string $ua): bool {
@@ -341,6 +345,6 @@ try {
     $stmt->bindValue(':is_entry', $isEntry, SQLITE3_INTEGER);
     $stmt->execute();
     $db->close();
-} catch (Exception $e) {
+} catch (Throwable $e) {
     // Fail silently — never break the tracked page
 }

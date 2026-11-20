@@ -364,6 +364,7 @@ The dashboard works on phones as well:
 |---|---|---|
 | `T8` | No password of your own is set — `STATS_PASSWORD` is empty, missing or still the shipped default. Sign-in stays locked | Set a real `STATS_PASSWORD`, ideally a `password_hash()` value |
 | `T15` | The login lockout file in `pima-cache/` could not be opened or written. pima then refuses every sign-in, because without it the brute-force lockout would not hold. The reason is also written to the PHP error log | Give the web server write access to `pima-cache/` and check owner and permissions of the `.lockout_*.json` files |
+| `T19` | The PHP extension `sqlite3` is missing. The tracker still answers every pageview with its pixel but stores nothing, so the dashboard shows this message instead of "No data yet". Also written to the PHP error log | Enable `ext/sqlite3` for the PHP version the site runs on. Some hosts leave it out of newer PHP versions; switching to a version that has it works too |
 | `T20` | The dashboard could not save a new password, or `pima-cache/.pima-password` exists but holds no valid hash. A failed change keeps the previous password; a damaged file locks sign-in instead of silently falling back to `pima-core.php` | Check write access to `pima-cache/`. Delete a damaged `.pima-password` via FTP; `STATS_PASSWORD` then applies |
 
 ---
@@ -475,6 +476,10 @@ An update replaces exactly two files: **`pima.php` and `pima-tracker.php`**. Upl
 
 Settings added in a later release take their default automatically, so an update never requires editing `pima-core.php`. The version you run is shown in the dashboard footer.
 
+### To 0.6.2
+
+- **Missing SQLite3 is reported.** Without the PHP extension `sqlite3`, the dashboard shows `T19` instead of "No data yet", and the tracker no longer fails on every pageview; it sends its pixel and stops.
+
 ### To 0.6.1
 
 - **Plainer wording.** "Sessions" are now "visits", "visitor-days" are "visitors" marked "counted daily", and the key figures start with visitors, visits and pageviews. Tooltips say what a figure means. `$PIMA_STRINGS` keys `kpi_visitor_days`, `tip_daily_visitors` and `tip_visitor_days` were replaced by `counted_daily` and `tip_visitors`.
@@ -506,6 +511,8 @@ Settings added in a later release take their default automatically, so an update
 ### "No data yet" — dashboard stays empty
 
 The most common reason: the tracking snippet is missing or the token is wrong.
+If the dashboard shows code `T19` instead, the server's PHP lacks the SQLite3
+extension — see [Error codes](#error-codes).
 
 1. Open your page in the browser, right-click → View Page Source, and search for `pima-tracker.php` — if it's not there, the snippet wasn't added correctly
 2. Make sure the token in your snippet matches `TRACKER_TOKEN` in `pima-core.php` exactly — it's case-sensitive

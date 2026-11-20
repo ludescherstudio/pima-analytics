@@ -246,6 +246,7 @@ Next steps for the user:
 - Open https://<domain>/pima and log in
 - Visit any tracked page once, then refresh the dashboard to confirm hits are recorded
 - Verify pima-cache/ directory has write permissions (chmod 0750 if needed)
+- If the dashboard shows code T19, enable the PHP extension SQLite3 in the hosting panel (or switch to a PHP version that has it)
 - Optionally add the developer's own IP to EXCLUDED_IPS in pima-core.php to hide dev traffic
 ```
 
@@ -353,5 +354,6 @@ Next steps for the user:
 - Open https://praxis-mueller.example/pima and log in
 - Visit any tracked page once, then refresh the dashboard to confirm hits are recorded
 - Verify pima-cache/ directory has write permissions (chmod 0750 if needed)
+- If the dashboard shows code T19, enable the PHP extension SQLite3 in the hosting panel (or switch to a PHP version that has it)
 - Optionally add the developer's own IP to EXCLUDED_IPS in pima-core.php to hide dev traffic
 ```

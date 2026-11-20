@@ -4,7 +4,7 @@
  * URL: example.com/pima
  */
 
-define('PIMA_VERSION', '0.6.1');
+define('PIMA_VERSION', '0.6.2');
 
 require_once __DIR__ . '/pima-core.php';
 date_default_timezone_set(TIMEZONE);
@@ -380,6 +380,7 @@ $strings = [
         'show'             => 'Show',
         'hide'             => 'Hide',
         'no_data'          => 'No data yet — add the tracking snippet to your site to get started.',
+        'err_sqlite'       => 'Pageviews are not being saved: the PHP extension SQLite3 is missing on this server. Please ask your host to enable it. (Code T19)',
         'no_pages'         => 'No data in this period',
         'no_referrers'     => 'No referrers in this period',
         'no_external'      => 'No external traffic in this period',
@@ -520,6 +521,7 @@ $strings = [
         'show'             => 'Anzeigen',
         'hide'             => 'Ausblenden',
         'no_data'          => 'Noch keine Daten — fügen Sie das Tracking-Snippet auf Ihrer Website ein.',
+        'err_sqlite'       => 'Seitenaufrufe werden nicht gespeichert: Auf diesem Server fehlt die PHP-Erweiterung SQLite3. Bitte lassen Sie sie von Ihrem Hosting aktivieren. (Code T19)',
         'no_pages'         => 'Keine Daten in diesem Zeitraum',
         'no_referrers'     => 'Keine verweisenden Websites in diesem Zeitraum',
         'no_external'      => 'Kein externer Traffic in diesem Zeitraum',
@@ -638,14 +640,19 @@ if ($pwChange && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pw_chang
 }
 
 // ---- DB helper ----
+// Some hosts ship PHP without the SQLite3 extension. The tracker then stores
+// nothing, so the dashboard says why instead of "no data yet" (Code T19).
+$sqliteMissing = !class_exists('SQLite3');
+if ($sqliteMissing && $authed && !isset($_GET['live'])) error_log('pima: PHP extension sqlite3 is missing, pageviews are not stored (T19)');
+
 function openDb(): ?SQLite3 {
-    if (!file_exists(DB_PATH)) return null;
+    if (!class_exists('SQLite3') || !file_exists(DB_PATH)) return null;
     try {
         $db = new SQLite3(DB_PATH, SQLITE3_OPEN_READONLY);
         $db->enableExceptions(true);
         $db->busyTimeout(3000);
         return $db;
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         return null;
     }
 }
@@ -708,7 +715,7 @@ if ($authed && $advancedMode && isset($_POST['clear_data']) && ($_POST['confirm_
             $db->exec('VACUUM');
             $db->close();
             $clearSuccess = true;
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $clearError = true;
         }
     } else {
@@ -1846,7 +1853,9 @@ if ($isLocked) {
   <div class="alert-success"><?= $t['cleared'] ?></div>
 <?php endif; ?>
 
-<?php if ($stats['total'] === 0): ?>
+<?php if ($sqliteMissing): ?>
+  <div class="login-error" role="alert"><?= htmlspecialchars($t['err_sqlite']) ?></div>
+<?php elseif ($stats['total'] === 0): ?>
   <div class="card"><div class="empty"><?= $t['no_data'] ?></div></div>
 <?php else: ?>
 
